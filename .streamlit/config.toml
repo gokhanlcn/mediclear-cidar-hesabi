@@ -1,0 +1,11 @@
+[browser]
+gatherUsageStats = false
+
+[server]
+# İlk açılışta terminalde e-posta sorusu çıkmasın; tarayıcıyı baslat betiği açar.
+headless = true
+# Not: yerel başlatıcılar (baslat.bat/.sh) ayrıca --server.address localhost verir;
+# burada verilmez ki Streamlit Community Cloud'da uygulama dışarıdan erişilebilsin.
+
+[theme]
+primaryColor = "#1F6FB2"

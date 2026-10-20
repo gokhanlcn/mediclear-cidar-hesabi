@@ -1,0 +1,170 @@
+"""Özet rapor: internetsiz açılan, kendi içinde tam tek bir HTML dosyası (tarayıcıdan PDF'e yazdırılabilir)."""
+
+from __future__ import annotations
+
+import datetime as _dt
+import html
+
+import pandas as pd
+import plotly.graph_objects as go
+
+from physics import montecarlo, params
+from physics.model import ModelResult
+from physics.params import Settings
+from physics.symbols import PARAMS
+from physics.units import from_si
+from ui import charts
+from ui.common import DISCLAIMER, num, style_fig
+
+ASSUMPTIONS = [
+    "Toplam kalınlık = jel katmanı (D3, ısı iletimi) + sürüklenen film (D7, D8); kürde (1 − ε) ile çeker (D9).",
+    "Jelleşme gizli ısısı, banyodaki konveksiyon ve sıcaklığa bağlı özellik değişimi ihmal edildi.",
+    "Jelleşme geri dönüşsüz kabul edildi; D3 Crank–Nicolson sonlu farklarla çözüldü.",
+    "D7 formül seçimi: Ca ≥ 1 → D7c, R ≤ ℓ_c → D7b, R > ℓ_c → D7a; 0,1 < Ca < 1 veya ℓ_c < R < 3ℓ_c "
+    "geçiş bölgesi (Monte Carlo bu aralıktan örnekler).",
+    "Film, jel yüzeyine (R_s + s_jel) sürüklenir; toplamda L boyunca ortalama film kalınlığı kullanılır.",
+    "Spiralli tüp iki daldırma olarak modellendi; 1. kat + tel bölgesi plastisol özellikleriyle tek katman, "
+    "tel ısıl olarak ihmal edildi. w = s_1 + d_tel + s_2.",
+    "D1 (toplu kütle) yalnızca dolu mandrelde, Bi < 0,1 iken geçerli; fırından banyoya transferde soğuma ihmal edildi.",
+]
+
+CSS = """
+@page { size: A4; margin: 10mm; }
+* { box-sizing: border-box; }
+body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5px; color: #1d2330; margin: 0 auto;
+       max-width: 1050px; padding: 14px; background: #fff; }
+h1 { font-size: 19px; margin: 0 0 2px; } h2 { font-size: 13.5px; margin: 14px 0 6px; border-bottom: 2px solid #1F6FB2;
+padding-bottom: 2px; color: #1F6FB2; }
+.meta { color: #5b6475; margin-bottom: 8px; }
+.note { background: #eaf2fb; border-left: 4px solid #1F6FB2; padding: 6px 9px; margin: 6px 0; }
+.warn { background: #fff7db; border-left: 4px solid #e0a400; padding: 6px 9px; margin: 6px 0; }
+.kpis { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.kpi { flex: 1 1 130px; border: 1px solid #d9dee8; border-radius: 6px; padding: 6px 9px; }
+.kpi b { display: block; font-size: 16px; margin-top: 2px; }
+.ok { color: #1e7a46; } .bad { color: #b3261e; }
+table { border-collapse: collapse; width: 100%; margin: 4px 0; }
+th, td { border: 1px solid #d9dee8; padding: 2px 5px; text-align: left; vertical-align: top; }
+th { background: #f2f5fa; } td.n { text-align: right; white-space: nowrap; }
+tr.nosrc td { background: #fff8de; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cols { columns: 2; column-gap: 14px; }
+.fig { border: 1px solid #e3e7ef; border-radius: 6px; break-inside: avoid; }
+ul { margin: 4px 0 4px 16px; padding: 0; } li { margin: 1px 0; }
+.footer { margin-top: 10px; color: #5b6475; font-size: 9.5px; }
+@media screen and (max-width: 700px) { .grid { grid-template-columns: 1fr; } .cols { columns: 1; } }
+@media print { .noprint { display: none; } body { padding: 0; } h2 { break-after: avoid; } }
+"""
+
+
+def _fmt(x, digits: int | None = None) -> str:
+    if x is None or (isinstance(x, float) and pd.isna(x)):
+        return "–"
+    if isinstance(x, str):
+        return html.escape(x)
+    return (f"{x:.{digits}f}" if digits is not None else f"{x:.6g}").replace(".", ",")
+
+
+def _table(df: pd.DataFrame, num_cols: set[str] = frozenset(), row_class=None) -> str:
+    head = "".join(f"<th>{html.escape(str(c))}</th>" for c in df.columns)
+    rows = []
+    for i, r in df.iterrows():
+        cls = f' class="{row_class(i, r)}"' if row_class else ""
+        cells = "".join(f'<td class="n">{_fmt(r[c])}</td>' if c in num_cols else f"<td>{_fmt(r[c])}</td>"
+                        for c in df.columns)
+        rows.append(f"<tr{cls}>{cells}</tr>")
+    return f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+
+
+def _fig_html(fig: go.Figure, first: bool, height: int = 300) -> str:
+    style_fig(fig, height)
+    fig.update_layout(title_font_size=13, font_size=10, margin=dict(t=40))
+    return '<div class="fig">' + fig.to_html(full_html=False, include_plotlyjs=True if first else False,
+                                             config={"displaylogo": False, "responsive": True}) + "</div>"
+
+
+def build_report(df: pd.DataFrame, s: Settings, res: ModelResult, p: dict,
+                 numara: pd.DataFrame | None = None, mc: dict | None = None, ters: dict | None = None) -> str:
+    mm = lambda x: from_si(x, "mm")  # noqa: E731
+    v = params.validate(df, s)
+    now = _dt.datetime.now().strftime("%d.%m.%Y %H:%M")
+    parts = [f"<h1>MediClear – Daldırma Cidar Kalınlığı Hesabı: Özet Rapor</h1>"
+             f"<div class='meta'>Oluşturma: {now} · Denklemler: cidar_kalinligi_hesabi.md (D1–D12)</div>",
+             f"<div class='note'>{html.escape(DISCLAIMER)}</div>"]
+    if v.missing_source:
+        syms = ", ".join(PARAMS[k].sym for k in v.missing_source)
+        parts.append(f"<div class='warn'><b>Taslak:</b> kaynağı belirtilmemiş değerler kullanıldı ({html.escape(syms)}). "
+                     "Bu değerler kaynakla teyit edilmeden rapor kesin sonuç olarak kullanılmamalıdır.</div>")
+
+    # --- Ayarlar ve ana sonuç ---------------------------------------------------------
+    mode = "D1'den (ön ısıtma)" if s.T_m0_mode == "D1" else "doğrudan girildi"
+    parts.append("<h2>1. Ayarlar ve ana sonuç</h2>"
+                 f"<div>Malzeme: <b>{s.material_type}</b> · Mandrel: <b>{html.escape(s.mandrel_material)}</b> · "
+                 f"Spiral: <b>{'evet (iki daldırma)' if s.spiral else 'hayır (tek daldırma)'}</b> · "
+                 f"T_m0: <b>{mode}</b></div>")
+    status = "<b class='ok'>✔ Uygun</b>" if res.ok else "<b class='bad'>✘ Uygun değil</b>"
+    parts.append("<div class='kpis'>"
+                 f"<div class='kpi'>Hesaplanan cidar w<b>{num(mm(res.w), 3)} mm</b></div>"
+                 f"<div class='kpi'>Hedef w<b>{num(mm(res.w_target), 3)} ± {num(mm(res.w_tol), 3)} mm</b></div>"
+                 f"<div class='kpi'>Sapma<b>{num(mm(res.deviation), 3)} mm</b></div>"
+                 f"<div class='kpi'>Hesaplanan OD<b>{num(mm(p['ID'] + 2 * res.w), 3)} mm</b></div>"
+                 f"<div class='kpi'>Durum{status}</div></div>")
+    dips = [res.dip1] + ([res.dip2] if res.dip2 else [])
+    rows = [{"Daldırma": f"{d.index}.", "T_m0 [°C]": from_si(d.T_m0, "°C"), "t_bekleme [s]": d.t_wait,
+             "s_max (D2) [mm]": mm(d.s_max), "s_jel (D3) [mm]": mm(d.s_jel), "C (D4)": d.C,
+             "D7 formülü": d.film.formula + (" (geçiş)" if d.film.transition else ""),
+             "h_0 [mm]": mm(d.h0), "h ort. (D8) [mm]": mm(d.h), "s_kür (D9) [mm]": mm(d.s_kur)} for d in dips]
+    dd = pd.DataFrame(rows).round(4)
+    parts.append(_table(dd, num_cols=set(dd.columns) - {"Daldırma", "D7 formülü"}))
+
+    if mc is not None:
+        mcr = mc["res"]
+        y = mcr.outputs[mc.get("out_key", "w")].to_numpy()
+        pct = montecarlo.percentiles(y)
+        prob = montecarlo.hit_probability(y, res.w_target, res.w_tol)
+        parts.append("<div class='kpis'>"
+                     f"<div class='kpi'>Monte Carlo P5<b>{num(mm(pct['P5']), 3)} mm</b></div>"
+                     f"<div class='kpi'>Medyan<b>{num(mm(pct['medyan']), 3)} mm</b></div>"
+                     f"<div class='kpi'>P95<b>{num(mm(pct['P95']), 3)} mm</b></div>"
+                     f"<div class='kpi'>Hedefi tutturma olasılığı<b>%{num(100 * prob, 0)}</b></div>"
+                     f"<div class='kpi'>Deneme sayısı<b>{mcr.n_ok}</b></div></div>")
+
+    if numara is not None and not numara.empty:
+        parts.append("<h2>2. Numara bazında hedefler ve sonuçlar</h2>")
+        parts.append(_table(numara, num_cols={c for c in numara.columns if "[" in c and "P5" not in c}))
+
+    # --- Grafikler ----------------------------------------------------------------------
+    figs = [charts.gel_growth(res.dip1),
+            charts.wall_composition(res, p["eps"], p.get("phi", 1.0) if s.material_type == "Organosol" else 1.0,
+                                    p.get("d_wire", 0.0))]
+    if mc is not None:
+        mcr = mc["res"]
+        out_key = mc.get("out_key", "w")
+        y = mcr.outputs[out_key].to_numpy()
+        figs.append(charts.mc_histogram(y, montecarlo.percentiles(y),
+                                        (res.w_target, res.w_tol) if out_key == "w" else None,
+                                        "Monte Carlo – sonuç dağılımı"))
+        sens = montecarlo.sensitivity(mcr.samples, y, mc.get("keys"))
+        if not sens.empty:
+            figs.append(charts.tornado(sens, mcr.n_ok, top_n=8))
+    if ters is not None:
+        figs.append(charts.design_map(ters["dm"], ters.get("title", "Ters tasarım haritası"),
+                                      nominal=(p["t_wait"], res.T_m0)))
+    parts.append(f"<h2>{3 if numara is not None and not numara.empty else 2}. Ana grafikler</h2><div class='grid'>")
+    parts += [_fig_html(f, i == 0) for i, f in enumerate(figs)]
+    parts.append("</div>")
+
+    # --- Girdiler ------------------------------------------------------------------------
+    keys = set(params.active_keys(s)) | {"T_fuz"}
+    t = df[df.Kod.isin(keys)][["Kod", "Sembol", "Parametre", "Birim", "Min", "Nominal", "Max", "Kaynak", "Not"]]
+    missing = set(v.missing_source)
+    parts.append("<h2>Girdiler ve kaynaklar</h2>")
+    parts.append(_table(t.drop(columns="Kod").reset_index(drop=True), num_cols={"Min", "Nominal", "Max"},
+                        row_class=lambda i, r: "nosrc" if t.iloc[i].Kod in missing else ""))
+    parts.append("<h2>Model varsayımları</h2><ul class='cols'>"
+                 + "".join(f"<li>{html.escape(a)}</li>" for a in ASSUMPTIONS) + "</ul>")
+    parts.append("<div class='footer'>Bu rapor MediClear cidar kalınlığı hesap programıyla üretilmiştir. "
+                 "Sarı satırlar kaynağı boş değerlerdir. PDF için tarayıcıda Yazdır → PDF olarak kaydet.</div>")
+    return ("<!doctype html><html lang='tr'><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+            f"<title>MediClear Özet Rapor</title><style>{CSS}</style></head><body>"
+            + "".join(parts) + "</body></html>")

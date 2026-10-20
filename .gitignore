@@ -1,0 +1,9 @@
+# Yerel kurulum ve önbellekler
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Geliştirme dosyaları
+.claude/
+claude_code_prompt.md
