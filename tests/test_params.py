@@ -135,3 +135,48 @@ def test_old_files_with_nominal_column_load():
 def test_load_rejects_unknown_file():
     with pytest.raises(ValueError):
         params.load_file(b"abc", "x.txt")
+
+
+def test_project_table_matches_veriler_md():
+    from physics.project_data import PROJECT_DATA, missing_keys
+    df = params.project_table()
+    v = params.values_si(df)
+    assert v["ID"] == pytest.approx(8e-3) and v["OD"] == pytest.approx(10.8e-3)
+    assert v["OD_tol"] == pytest.approx(0.2e-3) and v["p_wire"] == pytest.approx(1.3e-3)
+    assert v["rho_m"] == 7990 and v["C_grav"] == 1.0 and v["C_dur"] == 0.3
+    assert v["T_g"] == pytest.approx(343.15) and v["tau_y"] == 0.0
+    # değeri olan her satırın kaynağı var; değeri olmayanlar boş
+    for k, (val, src, _) in PROJECT_DATA.items():
+        row = df[df.Kod == k].iloc[0]
+        assert (np.isnan(row[VALUE_COL]) if val is None else bool(row.Kaynak))
+    assert set(missing_keys()) == {"t_pre", "T_m0", "U", "t_drain", "T_m0_2", "T_s1", "T_t"}
+    assert params.project_settings().mandrel_material == "316L paslanmaz"
+
+
+def test_t_pre_not_required_in_direct_mode():
+    assert "t_pre" not in params.active_keys(Settings())
+    assert "t_pre" in params.active_keys(Settings(T_m0_mode="D1"))
+
+
+def test_link_second_dip_temperatures():
+    df = _set(params.project_table(), "T_m0", val=100.0)
+    new, changed = params.link_second_dip_temperatures(df)
+    assert set(changed) == {"T_m0_2", "T_s1", "T_t"}
+    for k in ("T_m0_2", "T_s1", "T_t"):
+        assert new.loc[new.Kod == k, VALUE_COL].iloc[0] == 100.0
+    new2, changed2 = params.link_second_dip_temperatures(_set(new, "T_m0_2", val=95.0))
+    assert new2.loc[new2.Kod == "T_t", VALUE_COL].iloc[0] == 95.0 and "T_m0_2" not in changed2
+    _, none = params.link_second_dip_temperatures(params.project_table())
+    assert none == []
+
+
+def test_project_data_runs_once_open_values_given():
+    from physics.model import Options, run_model
+    df = params.project_table()
+    for k, val in (("T_m0", 100.0), ("U", 1.0), ("t_drain", 10.0)):
+        df = _set(df, k, val=val, Kaynak="test")
+    df, _ = params.link_second_dip_temperatures(df)
+    s = Settings(film_model="D7c")
+    assert not params.validate(df, s).errors
+    res = run_model(params.values_si(df), Options(film_model="D7c", quality="hızlı"))
+    assert res.dip2 is not None and res.w > 0

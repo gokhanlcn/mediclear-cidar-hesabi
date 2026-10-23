@@ -11,8 +11,9 @@ from physics.params import Settings, Validation
 
 def init() -> None:
     ss = st.session_state
-    ss.setdefault("params_df", params.empty_table())
-    ss.setdefault("settings", Settings())
+    # Program açılışta MediClear proje verileriyle (veriler.md) başlar
+    ss.setdefault("params_df", params.project_table())
+    ss.setdefault("settings", params.project_settings())
     ss.setdefault("table_ver", 0)
     pending = ss.pop("pending_settings", None)
     if pending is not None:          # dosyadan yüklenen ayarlar (widget'lardan önce uygulanır)

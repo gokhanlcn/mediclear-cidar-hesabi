@@ -86,11 +86,11 @@ _add("R_i", "R_i", "Mandrel iç yarıçapı", "mm", "Mandrel", "D2, D3",
      "İçi boş mandrelde iç yarıçap; dolu mandrelde 0.", "0 (dolu)", "Tasarım kararı", 0,
      bound="nonneg")
 _add("L", "L", "Daldırma boyu", "mm", "Mandrel", "D8, D10",
-     "Mandrelin plastisole batan (kaplanan) boyu.", "≤ 400 (opsiyon 1000)", "Litzler teklifi", 400)
+     "Mandrelin plastisole batan (kaplanan) boyu.", "Tasarım kararı", "Makine tedarikçisi teklifi", 400)
 
 # --- Proses (1. daldırma) ----------------------------------------------------------------
 _add("T_oven", "T_fırın", "Ön ısıtma fırını sıcaklığı", "°C", "Proses", "D1",
-     "Mandrelin ısıtıldığı fırının hava sıcaklığı.", "150–425", "Litzler teklifi", 220, bound="any")
+     "Mandrelin ısıtıldığı fırının hava sıcaklığı.", "Tasarım kararı", "Makine tedarikçisi teklifi", 220, bound="any")
 _add("h_oven", "h_fırın", "Fırın konveksiyon katsayısı", "W/(m²·K)", "Proses", "D1",
      "Fırın havasından mandrele ısı geçiş katsayısı.", "20–100",
      "Isı transferi kitabı (ör. Churchill–Bernstein, Zukauskas), fırın üreticisi", 50)
@@ -177,6 +177,7 @@ _add("C_dur", "C_dur", "Akma gerilmesi katsayısı", "–", "Model katsayıları
 
 # Mandrel malzemesi (.md: 304 paslanmaz veya Al) – ρ_m, c_m, k_m önerileri
 MATERIALS: dict[str, dict[str, float]] = {
+    "316L paslanmaz": {"rho_m": 7990.0, "c_m": 500.0, "k_m": 16.2},
     "304 paslanmaz": {"rho_m": 8000.0, "c_m": 500.0, "k_m": 16.0},
     "Alüminyum": {"rho_m": 2700.0, "c_m": 900.0, "k_m": 200.0},
 }

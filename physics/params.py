@@ -30,7 +30,7 @@ class Settings:
     """Hesap seçenekleri (tabloyla birlikte kaydedilir)."""
     T_m0_mode: str = "direct"        # "direct" | "D1"
     material_type: str = "Plastisol"  # "Plastisol" | "Organosol"
-    mandrel_material: str = "304 paslanmaz"
+    mandrel_material: str = "316L paslanmaz"
     spiral: bool = True
     draft: bool = False              # Taslak mod: kaynaksız değerlerle hesaba izin ver
     film_model: str = ""             # FILM_MODELS anahtarı; boşsa seçilmemiş
@@ -85,6 +85,48 @@ def example_table() -> pd.DataFrame:
         else:
             df.loc[sel, "Not"] = APPROX_NOTE
     return df
+
+
+def project_table() -> pd.DataFrame:
+    """MediClear proje verileri (veriler.md): değer, kaynak ve not ile dolu tablo.
+
+    Belgede ters tasarımla belirlenecek olarak bırakılan değerler boştur; Not sütunu nedenini söyler.
+    """
+    from .project_data import PROJECT_DATA, DOC
+    df = empty_table()
+    for k, (val, src, note) in PROJECT_DATA.items():
+        if k not in TABLE_KEYS:
+            continue
+        sel = df.Kod == k
+        df.loc[sel, VALUE_COL] = np.nan if val is None else float(val)
+        df.loc[sel, "Kaynak"] = f"{DOC}: {src}" if src else ""
+        df.loc[sel, "Not"] = note
+    return df
+
+
+def link_second_dip_temperatures(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """veriler.md kuralı: T_m0,2 = T_m0 (başlangıç) ve T_s1 = T_t = T_m0,2.
+
+    T_m0,2 boşsa T_m0'dan alınır; T_s1 ve T_t, T_m0,2'ye eşitlenir. Değişen kodları döndürür.
+    """
+    df = df.copy()
+    changed = []
+    T2 = _val(df, "T_m0_2")
+    if T2 is None:
+        T2 = _val(df, "T_m0")
+        if T2 is None:
+            return df, changed
+        df.loc[df.Kod == "T_m0_2", [VALUE_COL, "Kaynak"]] = [T2, "veriler.md: başlangıç değeri = T_m0"]
+        changed.append("T_m0_2")
+    for k in ("T_s1", "T_t"):
+        df.loc[df.Kod == k, [VALUE_COL, "Kaynak"]] = [T2, "veriler.md: = T_m0,2"]
+        changed.append(k)
+    return df, changed
+
+
+def project_settings() -> "Settings":
+    from .project_data import SETTINGS
+    return Settings.from_dict(SETTINGS)
 
 
 def apply_material(df: pd.DataFrame, material: str) -> pd.DataFrame:
@@ -158,6 +200,8 @@ def active_keys(s: Settings) -> list[str]:
         keys.remove("phi")
     if s.T_m0_mode == "D1":
         keys.remove("T_m0")
+    else:
+        keys.remove("t_pre")     # T_m0 doğrudan girildiğinde t_ön D1'in sonucudur (hedefe ulaşma süresi)
     if not s.spiral:
         keys = [k for k in keys if k not in WIRE_KEYS]
     if s.film_model and s.film_model != "D7b":

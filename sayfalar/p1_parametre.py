@@ -20,10 +20,18 @@ st.markdown(
 s = state.settings()
 
 # --- Hızlı işlemler -------------------------------------------------------------------
-c1, c2 = st.columns(2)
+st.caption("Program açılışta **MediClear proje verileriyle** (veriler.md, 23.10.2026) başlar. Belgede ters "
+           "tasarımla belirlenecek olarak bırakılan değerler boştur; Not sütunu nedenini söyler.")
+c0, c1, c2 = st.columns(3)
+if c0.button("📄 MediClear proje verilerini yükle",
+             help="Grubun kabul ettiği güncel parametreleri (veriler.md) kaynaklarıyla birlikte yükler; mevcut "
+                  "değerlerin üzerine yazar."):
+    st.session_state["pending_settings"] = params.project_settings()
+    state.set_df(params.project_table())
+    st.rerun()
 if c1.button("📋 Örnek değerlerle doldur",
-             help="Tabloyu örnek değerlerle doldurur (mevcut değerlerin üzerine yazar). Kaynağı belli "
-                  "olanlara kaynak yazılır, diğerleri YAKLAŞIK işaretlenir. Film formülü seçimi sana kalır."):
+             help="Tabloyu genel örnek değerlerle (.md tipik aralıkları, ID 4 mm) doldurur; deneme içindir. "
+                  "Kaynağı belli olanlara kaynak yazılır, diğerleri YAKLAŞIK işaretlenir."):
     state.set_df(params.apply_material(params.example_table(), s.mandrel_material)
                  if s.mandrel_material in MATERIALS else params.example_table())
     st.toast("Örnek değerler yazıldı. YAKLAŞIK olanları kaynağa göre teyit et.", icon="📋")
@@ -188,6 +196,15 @@ for tab, group in zip(tabs, GROUPS):
                         "2. daldırmada plastisolle temas eden yüzey telin tepesidir (R + s_1 + d_tel). "
                         "Aşağıdaki sıcaklıklar mandrelin, iç katmanın ve telin **2. daldırmaya girerken** "
                         "sahip olduğu sıcaklıklardır.")
+            if st.button("🔗 T_s1 ve T_t'yi T_m0,2'ye eşitle (veriler.md kuralı)",
+                         help="veriler.md: T_s1 = T_t = T_m0,2 (ince katman ve tel mandrel sıcaklığına hızla gelir). "
+                              "T_m0,2 boşsa başlangıç değeri olarak T_m0 alınır."):
+                new_df, changed = params.link_second_dip_temperatures(state.df())
+                if changed:
+                    state.set_df(new_df)
+                    st.rerun()
+                else:
+                    st.warning("Önce T_m0 (Proses sekmesi) veya T_m0,2 değerini gir.")
         if group == "Model katsayıları":
             _film_model_panel()
             st.markdown("#### Katsayılar")
@@ -204,8 +221,9 @@ if v.errors:
     if empty:
         syms = ", ".join(PARAMS[i.key].sym for i in empty)
         st.error(f"🔴 {len(empty)} parametrenin değeri boş: {syms}.\n\n"
-                 "Kaynaktan değerleri bulup Değer sütununa yaz. Elinde henüz veri yoksa yukarıdaki "
-                 "**Örnek değerlerle doldur** düğmesine bas.")
+                 "Değerleri Değer sütununa yaz; neden boş oldukları ilgili satırın **Not** sütununda yazar "
+                 "(ör. ters tasarımla belirlenecek). Yalnızca programı denemek için **Örnek değerlerle doldur** "
+                 "düğmesini kullanabilirsin.")
     if other:
         st.error(f"🔴 {len(other)} hata var – düzeltilmeden hesap yapılamaz:\n\n"
                  + "\n".join(f"- {i.message}" for i in other))

@@ -172,13 +172,13 @@ Hesap için 30 civarı değer gerekiyor; bunların çoğu plastisol veri sayfas�
 | k\_m | Isıl iletkenlik | W/(m·K) | D1, D3 | 304: 16; Al: 200 | Malzeme tablosu |
 | R | Dış yarıçap (= ID/2) | mm | D1–D3, D7b, D10 | 1,0–5,5 (ID 2–11) | Ürün numarası |
 | R\_i | İç yarıçap (içi boşsa) | mm | D2, D3 | 0 (dolu) | Tasarım kararı |
-| L | Daldırma boyu | mm | D10 | ≤ 400 (opsiyon 1000) | Litzler teklifi |
+| L | Daldırma boyu | mm | D10 | Tasarım kararı | Makine tedarikçisi teklifi (gizli) |
 
 ### Proses
 
 | Sembol | Parametre | Birim | Denklem | Tipik aralık (yaklaşık) | Nereden bulunur |
 | --- | --- | --- | --- | --- | --- |
-| T\_fırın | Ön ısıtma fırını sıcaklığı | °C | D1 | 150–425 | Litzler teklifi |
+| T\_fırın | Ön ısıtma fırını sıcaklığı | °C | D1 | Tasarım kararı | Makine tedarikçisi teklifi (gizli) |
 | h\_fırın | Fırın konveksiyon katsayısı | W/(m²·K) | D1 | 20–100 | Isı transferi kitabı, fırın üreticisi |
 | t\_ön | Ön ısıtma süresi | s | D1 | Tasarım değişkeni | Çevrim süresi hesabı |
 | T\_m0 | Daldırma anında mandrel sıcaklığı | °C | D2, D3 | D1'den hesaplanır | – |
@@ -249,10 +249,10 @@ En çok değer tek bir belgeden gelir: seçilen plastisolün teknik veri sayfas�
 
 - **Plastisol veya reçine tedarikçisi:** TDS'nin yanında jel eğrisi (sıcaklığa karşı jelleşme), viskozite–sıcaklık eğrisi ve mümkünse akma gerilmesi verisi istenmeli. E\_a, viskozite–sıcaklık eğrisine D5 uydurularak hesaplanır.
 - **Malzeme tabloları:** Mandrel özellikleri (ρ\_m, c\_m, k\_m) için ders kitabı ekleri veya malzeme veri tabanları yeterli.
-- **Isı transferi kitabı:** h\_fırın için zorlanmış konveksiyonda silindir korelasyonları (ör. Churchill–Bernstein) kullanılabilir; fırın hava hızı Litzler'den istenmeli.
-- **Litzler teklifi (23EylBelge1.pdf):** fırın sıcaklık aralığı, daldırma boyu, servo eksen hassasiyeti.
+- **Isı transferi kitabı:** h\_fırın için zorlanmış konveksiyonda silindir korelasyonları (ör. Churchill–Bernstein) kullanılabilir; fırın hava hızı makine tedarikçisinden istenmeli.
+- **Makine tedarikçisi teklifi (gizli iç belge):** fırın sıcaklık aralığı, daldırma boyu, servo eksen hassasiyeti.
 - **İhale şartnameleri:** OD/ID hedefleri ve toleranslar.
-- **Tedarikçi denemesi:** m ve kalınlık ölçümü (D10) için Litzler, DEL veya plastisol tedarikçisinden numune denemesi istenebilir; bu, modeli doğrulayan tek gerçek veri olur.
+- **Tedarikçi denemesi:** m ve kalınlık ölçümü (D10) için makine tedarikçisi, DEL veya plastisol tedarikçisinden numune denemesi istenebilir; bu, modeli doğrulayan tek gerçek veri olur.
 
 Doldururken dikkat edilecekler:
 

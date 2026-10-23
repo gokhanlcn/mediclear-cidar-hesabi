@@ -28,8 +28,9 @@ if p["R_i"] > 0:
                "T_m0 doğrudan girilen değerdir.")
     st.stop()
 
+has_tpre = "t_pre" in p      # T_m0 doğrudan girildiğinde t_ön isteğe bağlıdır (D1'in sonucudur)
 res = preheat.preheat(p["rho_m"], p["c_m"], p["k_m"], R, p["R_i"], p["h_oven"], p["T_oven"],
-                      p["T_0"], p["t_pre"])
+                      p["T_0"], p.get("t_pre", 0.0))
 tau, Bi = res["tau"], res["Bi"]
 target = res["T_m_end"] if s.T_m0_mode == "D1" else p["T_m0"]
 t_reach = preheat.time_to_reach(target, p["T_oven"], p["T_0"], tau)
@@ -44,11 +45,14 @@ step("Biot sayısı",
      r"Bi = \frac{h_{\text{fırın}}\, R}{2\, k_m}",
      rf"\frac{{{L(p['h_oven'])} \cdot {L(R)}}}{{2 \cdot {L(p['k_m'])}}}", L(Bi),
      "Toplu kütle modeli (mandrel içinde tek sıcaklık) Bi < 0,1 iken geçerlidir.")
-step(f"t_ön = {num(p['t_pre'], 0)} s sonunda mandrel sıcaklığı",
-     r"T_m(t) = T_{\text{fırın}} - (T_{\text{fırın}} - T_0)\, e^{-t/\tau}",
-     rf"{L(Tf)} - ({L(Tf)} - {L(T0)}) \cdot e^{{-{L(p['t_pre'])}/{L(tau)}}}",
-     rf"{L(C(res['T_m_end']))}\;°\text{{C}}",
-     "D1 modunda bu değer 1. daldırmanın T_m0'ıdır." if s.T_m0_mode == "D1" else None)
+if has_tpre:
+    step(f"t_ön = {num(p['t_pre'], 0)} s sonunda mandrel sıcaklığı",
+         r"T_m(t) = T_{\text{fırın}} - (T_{\text{fırın}} - T_0)\, e^{-t/\tau}",
+         rf"{L(Tf)} - ({L(Tf)} - {L(T0)}) \cdot e^{{-{L(p['t_pre'])}/{L(tau)}}}",
+         rf"{L(C(res['T_m_end']))}\;°\text{{C}}",
+         "D1 modunda bu değer 1. daldırmanın T_m0'ıdır." if s.T_m0_mode == "D1" else None)
+else:
+    st.caption("t_ön girilmedi: gerekli ön ısıtma süresi aşağıda T_m0'dan hesaplanır.")
 if math.isfinite(t_reach):
     step(f"T_m0 = {num(C(target), 1)} °C'ye ulaşma süresi",
          r"t = \tau\, \ln\frac{T_{\text{fırın}} - T_0}{T_{\text{fırın}} - T_{m0}}",
@@ -63,16 +67,16 @@ else:
 if math.isinf(t_reach):
     st.error("Fırın sıcaklığı hedef T_m0'dan düşük; mandrel bu sıcaklığa hiç ulaşamaz. "
              "T_fırın'ı artır veya hedef T_m0'ı düşür.")
-elif s.T_m0_mode == "direct" and t_reach > p["t_pre"]:
+elif s.T_m0_mode == "direct" and has_tpre and t_reach > p["t_pre"]:
     st.warning(f"Girilen ön ısıtma süresi (t_ön = {num(p['t_pre'], 0)} s), hedef T_m0'a ulaşmak için "
                f"gereken {num(t_reach, 0)} s'den kısa.")
-elif s.T_m0_mode == "direct" and res["T_m_end"] - target > 5:
+elif s.T_m0_mode == "direct" and has_tpre and res["T_m_end"] - target > 5:
     st.info(f"Girilen t_ön = {num(p['t_pre'], 0)} s ile mandrel {num(C(res['T_m_end']), 1)} °C'ye "
             f"çıkar; hesaplarda ise doğrudan girilen T_m0 = {num(C(target), 1)} °C kullanılıyor. "
             f"İkisini tutarlı yapmak için t_ön'ü yaklaşık {num(t_reach, 0)} s yap ya da Veri "
             "girişi sayfasında T_m0'ı **D1'den hesapla** seçeneğine geç.")
 
-t_max = max(1.3 * p["t_pre"], 5 * tau, 1.2 * t_reach if math.isfinite(t_reach) else 0)
+t_max = max(1.3 * p.get("t_pre", 0.0), 5 * tau, 1.2 * t_reach if math.isfinite(t_reach) else 0)
 t = np.linspace(0, t_max, 400)
 fig = go.Figure()
 fig.add_scatter(x=t, y=C(preheat.mandrel_temperature(t, p["T_oven"], p["T_0"], tau)),
@@ -83,7 +87,8 @@ fig.add_hline(y=C(p["T_g"]), line=dict(dash="dot", color=COLORS["plastisol"]),
               annotation_text="T_g (jelleşme)", annotation_position="bottom right")
 fig.add_hline(y=C(target), line=dict(dash="dashdot", color=COLORS["ok"]),
               annotation_text="T_m0 (daldırma)", annotation_position="top right")
-fig.add_vline(x=p["t_pre"], line=dict(dash="dash", color="gray"), annotation_text="t_ön")
+if has_tpre:
+    fig.add_vline(x=p["t_pre"], line=dict(dash="dash", color="gray"), annotation_text="t_ön")
 if math.isfinite(t_reach):
     fig.add_scatter(x=[t_reach], y=[C(target)], mode="markers", name="Hedefe ulaşma",
                     marker=dict(size=12, color=COLORS["ok"], symbol="diamond"))
