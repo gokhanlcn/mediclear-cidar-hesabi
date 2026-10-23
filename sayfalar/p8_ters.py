@@ -10,7 +10,7 @@ from physics.units import from_si, to_si
 from ui import charts, compute, state
 from ui.common import assumptions, draft_banner, explain, num, show_fig
 
-st.title("8. Ters tasarım – ayar haritası")
+st.title("6. Ters tasarım – ayar haritası")
 st.markdown("Bu sayfa şu soruyu cevaplar: **Hedef cidarı yakalamak için mandrel sıcaklığı (T_m0) ve "
             "bekleme süresi (t_bekleme) hangi aralıkta olmalı?** Program bir ızgaradaki her ayar için "
             "cidarı hesaplar ve hedefi tutturan bölgeyi haritada gösterir.")
@@ -18,7 +18,7 @@ st.markdown("Bu sayfa şu soruyu cevaplar: **Hedef cidarı yakalamak için mandr
 v = state.require_ready()
 s = state.settings()
 draft_banner(v, s)
-p = state.nominal_si()
+p = state.values_si()
 mm = lambda x: from_si(x, "mm")  # noqa: E731
 degC = lambda T: from_si(T, "°C")  # noqa: E731
 Tg_c, Tm0_c = degC(p["T_g"]), degC(compute.run().T_m0)

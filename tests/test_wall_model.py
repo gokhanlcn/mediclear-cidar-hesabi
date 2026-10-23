@@ -3,8 +3,14 @@ import math
 import numpy as np
 import pytest
 
-from physics import inverse, montecarlo, wall
+from physics import inverse, wall
 from physics.model import ModelError, Options, run_model
+
+from conftest import TEST_FILM_MODEL
+
+
+def O(**kw):
+    return Options(film_model=TEST_FILM_MODEL, **kw)
 
 
 def test_d9_cure():
@@ -28,7 +34,7 @@ def test_d11_example_target():
 
 
 def test_model_runs_with_example_values(nominal):
-    res = run_model(nominal, Options(quality="hızlı"))
+    res = run_model(nominal, O(quality="hızlı"))
     assert res.dip2 is not None
     assert res.w == pytest.approx(res.dip1.s_kur + nominal["d_wire"] + res.dip2.s_kur)
     assert res.dip1.s_jel <= res.dip1.s_max
@@ -36,47 +42,20 @@ def test_model_runs_with_example_values(nominal):
 
 
 def test_model_single_dip(nominal):
-    res = run_model(nominal, Options(spiral=False, quality="hızlı"))
+    res = run_model(nominal, O(spiral=False, quality="hızlı"))
     assert res.dip2 is None and res.w == res.dip1.s_kur
 
 
 def test_model_rejects_bath_above_gel_temperature(nominal):
     with pytest.raises(ModelError):
-        run_model({**nominal, "T_b": nominal["T_g"] + 1}, Options(quality="hızlı"))
+        run_model({**nominal, "T_b": nominal["T_g"] + 1}, O(quality="hızlı"))
 
 
 def test_model_d1_only_solid_mandrel(nominal):
     with pytest.raises(ModelError):
-        run_model({**nominal, "R_i": 0.5e-3}, Options(T_m0_mode="D1", quality="hızlı"))
-    res = run_model(nominal, Options(T_m0_mode="D1", quality="hızlı"))
+        run_model({**nominal, "R_i": 0.5e-3}, O(T_m0_mode="D1", quality="hızlı"))
+    res = run_model(nominal, O(T_m0_mode="D1", quality="hızlı"))
     assert nominal["T_0"] < res.T_m0 < nominal["T_oven"]
-
-
-def test_monte_carlo_small(nominal):
-    from physics.symbols import PARAMS
-    from physics.units import to_si
-    ranges = {k: tuple(to_si(v, p.unit) for v in p.example) for k, p in PARAMS.items() if p.example}
-    mc = montecarlo.run_monte_carlo(ranges, 20, Options(quality="hızlı"), seed=1)
-    assert mc.n_ok + sum(mc.failures.values()) == 20
-    pct = montecarlo.percentiles(mc.outputs["w"])
-    assert pct["P5"] <= pct["medyan"] <= pct["P95"]
-    sens = montecarlo.sensitivity(mc.samples, mc.outputs["w"])
-    assert list(sens.abs()) == sorted(sens.abs(), reverse=True)
-
-
-def test_sampling_bounds_and_constants():
-    df = montecarlo.sample_inputs({"a": (1.0, 2.0, 4.0), "b": (5.0, 5.0, 5.0)}, 500, seed=3)
-    assert df["a"].between(1.0, 4.0).all() and (df["b"] == 5.0).all()
-    du = montecarlo.sample_inputs({"a": (1.0, 2.0, 4.0)}, 500, dist="düzgün", seed=3)
-    assert du["a"].between(1.0, 4.0).all()
-
-
-def test_sensitivity_sign():
-    rng = np.random.default_rng(0)
-    import pandas as pd
-    df = pd.DataFrame({"x": rng.uniform(size=200), "y": rng.uniform(size=200)})
-    s = montecarlo.sensitivity(df, 3 * df["x"] - 0.1 * df["y"])
-    assert s.index[0] == "x" and s["x"] > 0.9
 
 
 def test_feasible_intervals_monotonic():
@@ -87,6 +66,23 @@ def test_feasible_intervals_monotonic():
 
 
 def test_design_map_small(nominal):
-    dm = inverse.design_map(nominal, Options(quality="hızlı"), [403.15, 453.15], [5.0, 20.0])
+    dm = inverse.design_map(nominal, O(quality="hızlı"), [403.15, 453.15], [5.0, 20.0])
     assert dm.w.shape == (2, 2) and np.all(np.isfinite(dm.w))
     assert dm.w[1, 1] > dm.w[0, 0]        # daha sıcak ve uzun → daha kalın
+
+
+def test_model_requires_film_choice(nominal):
+    with pytest.raises(ModelError):
+        run_model(nominal, Options(quality="hızlı"))
+
+
+def test_second_dip_uses_table_inputs(nominal):
+    hot = run_model({**nominal, "T_m0_2": nominal["T_m0_2"] + 50, "T_s1": nominal["T_s1"] + 50}, O(quality="hızlı"))
+    base = run_model(nominal, O(quality="hızlı"))
+    assert hot.dip2.s_jel > base.dip2.s_jel and hot.dip1.s_jel == pytest.approx(base.dip1.s_jel)
+
+
+def test_film_coefficients_flow_into_model(nominal):
+    a = run_model(nominal, O(quality="hızlı"))
+    b = run_model({**nominal, "C_lld": 2 * nominal["C_lld"]}, O(quality="hızlı"))
+    assert b.dip1.h0 == pytest.approx(2 * a.dip1.h0)

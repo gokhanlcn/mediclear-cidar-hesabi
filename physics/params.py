@@ -1,8 +1,8 @@
-"""Parametre tablosu: oluşturma, örnek değerler, doğrulama, SI'ya çevirme, Excel/CSV.
+"""Veri tablosu: oluşturma, örnek değerler, doğrulama, SI'ya çevirme, Excel/CSV.
 
-Tablo sütunları .md'deki "Veri giriş tablosu" ile aynıdır:
-Sembol | Parametre | Birim | Min | Nominal | Max | Kaynak | Not   (+ gizli "Kod", "Grup")
+Sütunlar: Sembol | Parametre | Birim | Değer | Kaynak | Not   (+ gizli "Kod", "Grup")
 Değerler kullanıcı birimindedir; SI'ya çevirme yalnızca units.py üzerinden yapılır.
+Hesapta kullanılan her sayı (model katsayıları dahil) bu tablodan gelir.
 """
 
 from __future__ import annotations
@@ -14,15 +14,15 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from .symbols import MATERIALS, PARAMS
+from .symbols import FILM_MODELS, MATERIALS, PARAMS
 from .units import to_si
 
 APPROX_NOTE = "YAKLAŞIK – kaynağa göre teyit edin"
-PM10_NOTE = "±%10 varsayıldı (tek kaynak)"
-COLUMNS = ["Kod", "Grup", "Sembol", "Parametre", "Birim", "Min", "Nominal", "Max", "Kaynak", "Not"]
-VALUE_COLS = ["Min", "Nominal", "Max"]
+COLUMNS = ["Kod", "Grup", "Sembol", "Parametre", "Birim", "Değer", "Kaynak", "Not"]
+VALUE_COL = "Değer"
 TABLE_KEYS = [k for k in PARAMS if k != "m"]   # m (tartım) D10 sayfasında girilir
-NO_PM10 = {"g", "phi", "ID", "OD", "OD_tol"}    # sabitler ve şartname hedefleri belirsiz değildir
+WIRE_KEYS = [k for k in PARAMS if PARAMS[k].group == "Tel / 2. daldırma"]
+D1_KEYS = ("T_oven", "h_oven", "t_pre", "T_0")
 
 
 @dataclass
@@ -33,6 +33,7 @@ class Settings:
     mandrel_material: str = "304 paslanmaz"
     spiral: bool = True
     draft: bool = False              # Taslak mod: kaynaksız değerlerle hesaba izin ver
+    film_model: str = ""             # FILM_MODELS anahtarı; boşsa seçilmemiş
 
     def to_dict(self) -> dict:
         return dict(self.__dict__)
@@ -43,7 +44,10 @@ class Settings:
         for k, v in d.items():
             if hasattr(s, k):
                 cur = getattr(s, k)
-                setattr(s, k, _to_bool(v) if isinstance(cur, bool) else type(cur)(v))
+                if isinstance(cur, bool):
+                    setattr(s, k, _to_bool(v))
+                else:
+                    setattr(s, k, "" if v is None or (isinstance(v, float) and math.isnan(v)) else type(cur)(v))
         return s
 
 
@@ -60,25 +64,26 @@ def empty_table() -> pd.DataFrame:
     for k in TABLE_KEYS:
         p = PARAMS[k]
         rows.append({"Kod": k, "Grup": p.group, "Sembol": p.sym, "Parametre": p.name,
-                     "Birim": p.unit, "Min": np.nan, "Nominal": np.nan, "Max": np.nan,
-                     "Kaynak": "", "Not": ""})
+                     "Birim": p.unit, VALUE_COL: np.nan, "Kaynak": "", "Not": ""})
     df = pd.DataFrame(rows, columns=COLUMNS)
-    df.loc[df.Kod == "g", VALUE_COLS] = 9.81
-    df.loc[df.Kod == "g", "Kaynak"] = "Sabit"
-    df.loc[df.Kod == "phi", VALUE_COLS] = 1.0
-    df.loc[df.Kod == "phi", "Kaynak"] = "Plastisolde tanım gereği 1"
+    df.loc[df.Kod == "g", [VALUE_COL, "Kaynak"]] = [9.81, "Standart yerçekimi"]
+    df.loc[df.Kod == "phi", [VALUE_COL, "Kaynak"]] = [1.0, "Plastisolde tanım gereği 1"]
     return df
 
 
 def example_table() -> pd.DataFrame:
-    """.md'deki 'Tipik aralık' ve onaylı başlangıç değerleriyle dolu tablo (kaynak boş)."""
+    """Örnek değerlerle dolu tablo. Kaynağı belli olanların Kaynak sütunu dolar, diğerleri YAKLAŞIK."""
     df = empty_table()
     for k in TABLE_KEYS:
         p = PARAMS[k]
         if p.example is None or k in ("g", "phi"):
             continue
-        df.loc[df.Kod == k, VALUE_COLS] = list(p.example)
-        df.loc[df.Kod == k, "Not"] = APPROX_NOTE
+        sel = df.Kod == k
+        df.loc[sel, VALUE_COL] = p.example
+        if p.example_src:
+            df.loc[sel, "Kaynak"] = p.example_src
+        else:
+            df.loc[sel, "Not"] = APPROX_NOTE
     return df
 
 
@@ -86,7 +91,7 @@ def apply_material(df: pd.DataFrame, material: str) -> pd.DataFrame:
     """Mandrel malzemesine göre ρ_m, c_m, k_m önerisini yazar."""
     df = df.copy()
     for k, v in MATERIALS.get(material, {}).items():
-        df.loc[df.Kod == k, VALUE_COLS] = v
+        df.loc[df.Kod == k, VALUE_COL] = v
         df.loc[df.Kod == k, "Not"] = f"{material} – malzeme tablosu değeri, {APPROX_NOTE}"
     return df
 
@@ -98,34 +103,11 @@ def apply_editor_changes(df: pd.DataFrame, group: str, edited_rows: dict) -> pd.
     for pos, changes in edited_rows.items():
         i = rows[int(pos)]
         for col, val in changes.items():
-            if col in VALUE_COLS:
+            if col == VALUE_COL:
                 df.loc[i, col] = np.nan if val is None or val == "" else float(val)
             elif col in ("Kaynak", "Not"):
                 df.loc[i, col] = "" if val is None else str(val)
     return df
-
-
-def apply_pm10(df: pd.DataFrame, keys: list[str] | None = None) -> tuple[pd.DataFrame, list[str]]:
-    """Min ve Max'ı boş (veya nominale eşit) satırlara nominal ±%10 yazar."""
-    df = df.copy()
-    changed = []
-    for i, row in df.iterrows():
-        if keys is not None and row.Kod not in keys:
-            continue
-        nom = row.Nominal
-        if _blank(nom) or nom == 0 or row.Kod in NO_PM10:
-            continue
-        if (_blank(row.Min) or row.Min == nom) and (_blank(row.Max) or row.Max == nom):
-            lo, hi = sorted((0.9 * nom, 1.1 * nom))
-            df.loc[i, ["Min", "Max"]] = [lo, hi]
-            df.loc[i, "Not"] = _append_note(row.Not, PM10_NOTE)
-            changed.append(row.Kod)
-    return df, changed
-
-
-def _append_note(old: str, new: str) -> str:
-    old = (old or "").strip()
-    return new if not old else (old if new in old else f"{old}; {new}")
 
 
 def _blank(x) -> bool:
@@ -170,66 +152,47 @@ class Validation:
 
 
 def active_keys(s: Settings) -> list[str]:
+    """Bu ayarlarla hesapta kullanılan parametreler."""
     keys = [k for k in TABLE_KEYS if k != "T_fuz"]
     if s.material_type != "Organosol":
         keys.remove("phi")
     if s.T_m0_mode == "D1":
         keys.remove("T_m0")
     if not s.spiral:
-        keys.remove("d_wire")
+        keys = [k for k in keys if k not in WIRE_KEYS]
+    if s.film_model and s.film_model != "D7b":
+        keys.remove("C_fib")
+    if s.film_model in ("D7a", "D7b"):
+        keys.remove("C_grav")
+    if s.film_model in ("D7b", "D7c"):
+        keys.remove("C_lld")
     return keys
 
 
-D1_KEYS = ("T_oven", "h_oven", "t_pre", "T_0")
-
-
-def model_keys(s: Settings) -> list[str]:
-    """Kalınlık sonucunu gerçekten etkileyen parametreler (Monte Carlo duyarlılığı için).
-
-    T_m0 doğrudan girildiğinde D1 girdileri yalnızca ön ısıtma sayfasında kullanılır.
-    """
-    keys = active_keys(s)
-    if s.T_m0_mode != "D1":
-        keys = [k for k in keys if k not in D1_KEYS]
-    return [k for k in keys if k not in ("g",)]
-
-
-def _val(df: pd.DataFrame, key: str, col: str = "Nominal"):
-    v = df.loc[df.Kod == key, col]
+def _val(df: pd.DataFrame, key: str):
+    v = df.loc[df.Kod == key, VALUE_COL]
     return None if v.empty or _blank(v.iloc[0]) else float(v.iloc[0])
-
-
-def _rng(df, key):
-    """(min, max), boşsa nominal."""
-    nom = _val(df, key)
-    lo, hi = _val(df, key, "Min"), _val(df, key, "Max")
-    return (nom if lo is None else lo), (nom if hi is None else hi)
 
 
 def validate(df: pd.DataFrame, s: Settings) -> Validation:
     v = Validation()
     act = active_keys(s)
+    if not s.film_model:
+        v.issues.append(Issue("hata", None, "Film formülü seçilmemiş. Model katsayıları sekmesinde "
+                              "hangi film formülünün (D7a / D7b / D7c / D7a–D7c'nin küçüğü) "
+                              "kullanılacağını seç."))
     for _, row in df.iterrows():
         k = row.Kod
         if k not in act and k != "T_fuz":
             continue
         p = PARAMS[k]
-        sym = p.sym
-        nom, lo, hi = row.Nominal, row.Min, row.Max
-        if _blank(nom):
+        val = row[VALUE_COL]
+        if _blank(val):
             if k in act:
-                v.issues.append(Issue("hata", k, f"{sym} ({p.name}) için Nominal değer girilmemiş. "
-                                      "Veri sayfasından değeri bulup Nominal sütununa yaz."))
+                v.issues.append(Issue("hata", k, f"{p.sym} ({p.name}) için değer girilmemiş. "
+                                      "Kaynaktan değeri bulup Değer sütununa yaz."))
             continue
-        if k in act and (_blank(lo) or _blank(hi)):
-            v.issues.append(Issue("uyarı", k, f"{sym}: Min veya Max boş; Monte Carlo'da bu "
-                                  "parametre nominal değerde sabit tutulur."))
-        lo = nom if _blank(lo) else lo
-        hi = nom if _blank(hi) else hi
-        if not (lo <= nom <= hi):
-            v.issues.append(Issue("hata", k, f"{sym}: Min ≤ Nominal ≤ Max olmalı (şu an {lo:g} / "
-                                  f"{nom:g} / {hi:g}). Sütunları kontrol et."))
-        msg = _bound_message(p.bound, sym, p.name, min(lo, nom), max(hi, nom))
+        msg = _bound_message(p.bound, p.sym, p.name, float(val))
         if msg:
             v.issues.append(Issue("hata", k, msg))
         if k in act and not str(row.Kaynak or "").strip():
@@ -238,14 +201,14 @@ def validate(df: pd.DataFrame, s: Settings) -> Validation:
     return v
 
 
-def _bound_message(bound, sym, name, lo, hi) -> str | None:
-    if bound == "positive" and lo <= 0:
+def _bound_message(bound, sym, name, x) -> str | None:
+    if bound == "positive" and x <= 0:
         return f"{sym} ({name}) sıfırdan büyük olmalı; negatif veya sıfır değer fiziksel değil."
-    if bound == "nonneg" and lo < 0:
+    if bound == "nonneg" and x < 0:
         return f"{sym} ({name}) negatif olamaz."
-    if bound == "fraction" and (lo < 0 or hi >= 1):
+    if bound == "fraction" and not (0 <= x < 1):
         return f"{sym} ({name}) 0 ile 1 arasında olmalı (ör. %2 için 0,02 yaz)."
-    if bound == "fraction_closed" and (lo <= 0 or hi > 1):
+    if bound == "fraction_closed" and not (0 < x <= 1):
         return f"{sym} ({name}) 0'dan büyük ve en fazla 1 olmalı."
     return None
 
@@ -253,22 +216,13 @@ def _bound_message(bound, sym, name, lo, hi) -> str | None:
 def _relations(df: pd.DataFrame, s: Settings, v: Validation) -> None:
     n = lambda k: _val(df, k)  # noqa: E731
     T_g, T_b, T_m0 = n("T_g"), n("T_b"), n("T_m0")
-    if T_g is not None and T_b is not None:
-        if T_g <= T_b:
-            v.issues.append(Issue("hata", "T_b", "T_g, T_b'den büyük olmalı: banyo jel sıcaklığındaysa "
-                                  "banyo kendiliğinden jelleşir. Plastisol veri sayfasındaki jel "
-                                  "sıcaklığını ve banyo sıcaklığını kontrol et."))
-        elif _rng(df, "T_g")[0] <= _rng(df, "T_b")[1]:
-            v.issues.append(Issue("uyarı", "T_b", "T_g ve T_b aralıkları çakışıyor; Monte Carlo'da bu "
-                                  "örnekler geçersiz sayılıp atlanır."))
-    if s.T_m0_mode == "direct" and T_m0 is not None and T_g is not None:
-        if T_m0 <= T_g:
-            v.issues.append(Issue("hata", "T_m0", "T_m0, T_g'den büyük olmalı; mandrel jel "
-                                  "sıcaklığının altındaysa hiç jel oluşmaz. Fırın sıcaklığını veya "
-                                  "ön ısıtma süresini artır."))
-        elif _rng(df, "T_m0")[0] <= _rng(df, "T_g")[1]:
-            v.issues.append(Issue("uyarı", "T_m0", "T_m0'ın alt sınırı T_g'nin üst sınırına ulaşmıyor; "
-                                  "bazı Monte Carlo örneklerinde jel oluşmaz."))
+    if T_g is not None and T_b is not None and T_g <= T_b:
+        v.issues.append(Issue("hata", "T_b", "T_g, T_b'den büyük olmalı: banyo jel sıcaklığındaysa "
+                              "banyo kendiliğinden jelleşir. Plastisol veri sayfasındaki jel "
+                              "sıcaklığını ve banyo sıcaklığını kontrol et."))
+    if s.T_m0_mode == "direct" and T_m0 is not None and T_g is not None and T_m0 <= T_g:
+        v.issues.append(Issue("hata", "T_m0", "T_m0, T_g'den büyük olmalı; mandrel jel sıcaklığının "
+                              "altındaysa hiç jel oluşmaz. Fırın sıcaklığını veya ön ısıtma süresini artır."))
     if s.T_m0_mode == "D1":
         T_oven, T_0 = n("T_oven"), n("T_0")
         if T_oven is not None and T_0 is not None and T_oven <= T_0:
@@ -280,12 +234,17 @@ def _relations(df: pd.DataFrame, s: Settings, v: Validation) -> None:
         R_i = n("R_i")
         if R_i is not None and R_i > 0:
             v.issues.append(Issue("hata", "R_i", "D1 (ön ısıtma) yalnızca dolu mandrel için tanımlı. "
-                                  "R_i'yi 0 yap ya da Ayarlar'da 'T_m0'ı doğrudan gir' seçeneğine geç."))
+                                  "R_i'yi 0 yap ya da Hesap ayarları'nda 'T_m0'ı doğrudan gir' seçeneğine geç."))
     ID, OD, R_i = n("ID"), n("OD"), n("R_i")
     if ID is not None and R_i is not None and R_i >= ID / 2:
         v.issues.append(Issue("hata", "R_i", "R_i, mandrelin dış yarıçapından (ID/2) küçük olmalı."))
     if ID is not None and OD is not None and OD <= ID:
         v.issues.append(Issue("hata", "OD", "Dış çap hedefi (OD), iç çaptan (ID) büyük olmalı."))
+    if s.spiral:
+        d, p = n("d_wire"), n("p_wire")
+        if d is not None and p is not None and p < d:
+            v.issues.append(Issue("hata", "p_wire", "Hatve p, tel çapı d'den küçük olamaz; sarımlar üst "
+                                  "üste biner. Yay teknik resmini kontrol et."))
     T_fuz = n("T_fuz")
     if T_fuz is not None and T_g is not None and T_fuz <= T_g:
         v.issues.append(Issue("uyarı", "T_fuz", "T_füz genellikle T_g'den yüksektir; veri sayfasını "
@@ -294,29 +253,17 @@ def _relations(df: pd.DataFrame, s: Settings, v: Validation) -> None:
 
 # --- SI'ya çevirme ----------------------------------------------------------------------
 
-def nominal_si(df: pd.DataFrame) -> dict[str, float]:
+def values_si(df: pd.DataFrame) -> dict[str, float]:
     out = {}
     for _, row in df.iterrows():
-        if not _blank(row.Nominal):
-            out[row.Kod] = to_si(float(row.Nominal), row.Birim)
-    return out
-
-
-def ranges_si(df: pd.DataFrame) -> dict[str, tuple[float, float, float]]:
-    out = {}
-    for _, row in df.iterrows():
-        if _blank(row.Nominal):
-            continue
-        nom = float(row.Nominal)
-        lo = nom if _blank(row.Min) else float(row.Min)
-        hi = nom if _blank(row.Max) else float(row.Max)
-        out[row.Kod] = tuple(to_si(x, row.Birim) for x in (lo, nom, hi))
+        if not _blank(row[VALUE_COL]):
+            out[row.Kod] = to_si(float(row[VALUE_COL]), row.Birim)
     return out
 
 
 # --- Kaydet / yükle ---------------------------------------------------------------------
 
-EXPORT_COLS = ["Kod", "Sembol", "Parametre", "Birim", "Min", "Nominal", "Max", "Kaynak", "Not"]
+EXPORT_COLS = ["Kod", "Sembol", "Parametre", "Birim", VALUE_COL, "Kaynak", "Not"]
 
 
 def to_excel_bytes(df: pd.DataFrame, s: Settings, extra: dict[str, pd.DataFrame] | None = None) -> bytes:
@@ -335,7 +282,10 @@ def to_csv_bytes(df: pd.DataFrame) -> bytes:
 
 
 def load_file(data: bytes, filename: str) -> tuple[pd.DataFrame, Settings | None, list[str]]:
-    """Kaydedilmiş Excel/CSV'yi okur. Döner: (tablo, ayarlar veya None, uyarılar)."""
+    """Kaydedilmiş Excel/CSV'yi okur. Döner: (tablo, ayarlar veya None, uyarılar).
+
+    Eski sürüm dosyalarındaki 'Nominal' sütunu 'Değer' olarak okunur; Min/Max yok sayılır.
+    """
     notes: list[str] = []
     settings = None
     if filename.lower().endswith((".xlsx", ".xlsm")):
@@ -351,6 +301,8 @@ def load_file(data: bytes, filename: str) -> tuple[pd.DataFrame, Settings | None
         raw = pd.read_csv(io.BytesIO(data), sep=";", decimal=",", encoding="utf-8-sig")
     else:
         raise ValueError("Yalnızca .xlsx veya .csv dosyası yüklenebilir.")
+    if VALUE_COL not in raw.columns and "Nominal" in raw.columns:
+        raw = raw.rename(columns={"Nominal": VALUE_COL})
 
     df = empty_table()
     by_sym = {PARAMS[k].sym: k for k in TABLE_KEYS}
@@ -366,13 +318,14 @@ def load_file(data: bytes, filename: str) -> tuple[pd.DataFrame, Settings | None
         if unit and unit != "nan" and unit != PARAMS[key].unit:
             notes.append(f"{PARAMS[key].sym}: dosyadaki birim '{unit}', program '{PARAMS[key].unit}' "
                          "bekliyor. Değerleri kontrol et.")
-        for col in VALUE_COLS:
-            df.loc[df.Kod == key, col] = pd.to_numeric(row.get(col), errors="coerce")
+        df.loc[df.Kod == key, VALUE_COL] = pd.to_numeric(row.get(VALUE_COL), errors="coerce")
         for col in ("Kaynak", "Not"):
             val = row.get(col)
             df.loc[df.Kod == key, col] = "" if _blank(val) or str(val) == "nan" else str(val)
         matched += 1
     if matched == 0:
         raise ValueError("Dosyada tanınan parametre satırı yok. Sütun başlıklarının "
-                         "'Sembol, Parametre, Birim, Min, Nominal, Max, Kaynak, Not' olduğundan emin ol.")
+                         "'Sembol, Parametre, Birim, Değer, Kaynak, Not' olduğundan emin ol.")
+    if settings is not None and settings.film_model and settings.film_model not in FILM_MODELS:
+        settings.film_model = ""
     return df, settings, notes

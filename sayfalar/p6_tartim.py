@@ -8,14 +8,14 @@ from physics.units import from_si, to_si
 from ui import compute, state
 from ui.common import COLORS, draft_banner, explain, num, show_fig
 
-st.title("6. Tartım doğrulama (D10)")
+st.title("5. Tartımla doğrulama (D10)")
 st.markdown("Bir deneme daldırmasında mandreli daldırmadan önce ve sonra tartarsan, kütle farkından "
             "ortalama kaplama kalınlığını bulabilirsin. Bu, modeli doğrulayan **tek gerçek veridir**.")
 st.latex(r"s = \sqrt{R^2 + \frac{m}{\rho_p \pi L}} - R")
 
 v = state.require_ready()
 draft_banner(v, state.settings())
-p = state.nominal_si()
+p = state.values_si()
 res = compute.run()
 d1 = res.dip1
 mm = lambda x: from_si(x, "mm")  # noqa: E731

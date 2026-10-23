@@ -1,11 +1,9 @@
 """D5–D8 – Viskozite, boyutsuz sayılar, sürüklenen film ve süzülme. Tüm girdiler SI.
 
-D7 formül seçimi (proje kararı, .md D6'daki kuralların boşluklarını kapatır):
-* Ca ≥ 1           → D7c
-* R ≤ ℓ_c          → D7b
-* R > ℓ_c          → D7a
-* Geçiş bölgesi: 0,1 < Ca < 1 veya ℓ_c < R < 3·ℓ_c. Seçilen formül nominal değeri verir;
-  aday formüllerin min–max aralığı gösterilir ve Monte Carlo'da bu aralıktan örnek alınır.
+Formüllerin sayısal katsayıları (C_LLD, C_fib, C_grav, C_dur) ve hangi film formülünün
+kullanılacağı kullanıcı girdisidir; bu modül seçim yapmaz ve gizli katsayı içermez.
+.md D6'daki koşullar (R ≫ ℓ_c ve Ca < 0,1 → D7a; R ≲ ℓ_c → D7b; Ca ≫ 1 → D7c) yalnızca
+kullanıcıya bilgi olarak gösterilir.
 """
 
 from __future__ import annotations
@@ -15,15 +13,13 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-R_GAS = 8.314462618   # J/(mol·K)
-CA_LOW = 0.1
-CA_HIGH = 1.0
-R_TRANSITION = 3.0    # ℓ_c < R < 3·ℓ_c geçiş bölgesi
+R_GAS = 8.314462618   # J/(mol·K), evrensel gaz sabiti
 
 FORMULA_NAMES = {
     "D7a": "D7a – Landau–Levich–Derjaguin (kalın mandrel, düşük hız)",
     "D7b": "D7b – Fiber kaplama (ince mandrel)",
-    "D7c": "D7c – Yüksek hız (viskoz–yerçekimi dengesi)",
+    "D7c": "D7c – Viskoz–yerçekimi (yüksek hız)",
+    "min_ac": "D7a ile D7c'nin küçüğü (Rev. 2 yaklaşımı)",
 }
 
 
@@ -63,93 +59,69 @@ def capillary_length(gamma: float, rho_p: float, g: float) -> float:
 
 # --- D7 --------------------------------------------------------------------------------
 
-def h_lld(eta, U, gamma, rho_p, g):
-    """D7a."""
-    return 0.94 * (eta * U) ** (2.0 / 3.0) / (gamma ** (1.0 / 6.0) * (rho_p * g) ** 0.5)
+def h_lld(eta, U, gamma, rho_p, g, C_lld):
+    """D7a: h = C_LLD·(ηU)^(2/3) / (γ^(1/6)·(ρ_p g)^(1/2))."""
+    return C_lld * (eta * U) ** (2.0 / 3.0) / (gamma ** (1.0 / 6.0) * (rho_p * g) ** 0.5)
 
 
-def h_fiber(R, eta, U, gamma):
-    """D7b."""
-    return 1.34 * R * (eta * U / gamma) ** (2.0 / 3.0)
+def h_fiber(R, eta, U, gamma, C_fib):
+    """D7b: h = C_fib·R·Ca^(2/3)."""
+    return C_fib * R * (eta * U / gamma) ** (2.0 / 3.0)
 
 
-def h_gravity(eta, U, rho_p, g):
-    """D7c."""
-    return 0.8 * np.sqrt(eta * U / (rho_p * g))
+def h_gravity(eta, U, rho_p, g, C_grav):
+    """D7c: h = C_grav·√(ηU/(ρ_p g))."""
+    return C_grav * np.sqrt(eta * U / (rho_p * g))
 
 
-def all_formulas(R, eta, U, gamma, rho_p, g) -> dict[str, float]:
-    return {"D7a": h_lld(eta, U, gamma, rho_p, g),
-            "D7b": h_fiber(R, eta, U, gamma),
-            "D7c": h_gravity(eta, U, rho_p, g)}
+def all_formulas(R, eta, U, gamma, rho_p, g, C_lld, C_fib, C_grav) -> dict[str, float]:
+    a = h_lld(eta, U, gamma, rho_p, g, C_lld)
+    c = h_gravity(eta, U, rho_p, g, C_grav)
+    return {"D7a": a, "D7b": h_fiber(R, eta, U, gamma, C_fib), "D7c": c, "min_ac": np.minimum(a, c)}
 
 
 @dataclass
-class FilmChoice:
-    formula: str                 # seçilen formül anahtarı
-    h0: float                    # nominal film kalınlığı [m]
-    h_low: float                 # geçiş bölgesinde aday formüllerin en küçüğü
-    h_high: float                # ... en büyüğü
-    transition: bool
+class FilmResult:
+    formula: str                 # kullanıcının seçtiği formül
+    h0: float                    # çekme anındaki film kalınlığı [m]
     Ca: float
     l_c: float
-    values: dict[str, float] = field(default_factory=dict)
-    reason: str = ""
-
-    def sample(self, u: float) -> float:
-        """Monte Carlo için: geçiş bölgesinde [h_low, h_high] aralığından u∈[0,1] ile değer."""
-        return self.h_low + u * (self.h_high - self.h_low) if self.transition else self.h0
+    R: float                     # filmin sürüklendiği yüzeyin yarıçapı [m]
+    values: dict[str, float] = field(default_factory=dict)   # tüm formüllerin sonucu (karşılaştırma)
 
 
-def choose_film(R: float, eta: float, U: float, gamma: float, rho_p: float, g: float) -> FilmChoice:
-    Ca = capillary_number(eta, U, gamma)
-    l_c = capillary_length(gamma, rho_p, g)
-    vals = all_formulas(R, eta, U, gamma, rho_p, g)
-    ratio = R / l_c
-    geom = "D7b" if ratio <= 1.0 else "D7a"
-    notes = []
+def film_thickness(model: str, R: float, eta: float, U: float, gamma: float, rho_p: float, g: float,
+                   C_lld: float, C_fib: float, C_grav: float) -> FilmResult:
+    if model not in FORMULA_NAMES:
+        raise ValueError("Film formülü seçilmemiş. 0. Veri girişi → Model katsayıları sekmesinden seç.")
+    vals = {k: float(v) for k, v in all_formulas(R, eta, U, gamma, rho_p, g, C_lld, C_fib, C_grav).items()}
+    return FilmResult(formula=model, h0=vals[model], Ca=capillary_number(eta, U, gamma),
+                      l_c=capillary_length(gamma, rho_p, g), R=R, values=vals)
 
-    if Ca >= CA_HIGH:
-        formula = "D7c"
-        notes.append(f"Ca = {Ca:.3g} ≥ 1 olduğu için yüksek hız formülü (D7c) seçildi.")
-    else:
-        formula = geom
-        if geom == "D7b":
-            notes.append(f"R/ℓ_c = {ratio:.2f} ≤ 1 (ince mandrel) olduğu için D7b seçildi.")
-        else:
-            notes.append(f"R/ℓ_c = {ratio:.2f} > 1 (kalın mandrel) olduğu için D7a seçildi.")
-        if Ca <= CA_LOW:
-            notes.append(f"Ca = {Ca:.3g} ≤ 0,1: düşük hız koşulu sağlanıyor.")
 
-    candidates = {formula}
-    if CA_LOW < Ca < CA_HIGH:
-        candidates |= {geom, "D7c"}
-        notes.append(f"Ca = {Ca:.3g}, 0,1 ile 1 arasında: .md kuralları bu bölgeyi kapsamıyor "
-                     "(GEÇİŞ BÖLGESİ).")
-    if 1.0 < ratio < R_TRANSITION and Ca < CA_HIGH:
-        candidates |= {"D7a", "D7b"}
-        notes.append(f"R/ℓ_c = {ratio:.2f}, 1 ile {R_TRANSITION:g} arasında: R ≫ ℓ_c koşulu tam "
-                     "sağlanmıyor (GEÇİŞ BÖLGESİ).")
-    transition = len(candidates) > 1
-    cand_vals = [vals[c] for c in sorted(candidates)]
-    if transition:
-        notes.append("Nominal değer seçilen formülden; belirsizlik için "
-                     + ", ".join(sorted(candidates)) + " formüllerinin aralığı kullanılır.")
-    return FilmChoice(formula=formula, h0=vals[formula], h_low=min(cand_vals),
-                      h_high=max(cand_vals), transition=transition, Ca=Ca, l_c=l_c, values=vals,
-                      reason=" ".join(notes))
+def md_criteria(R: float, Ca: float, l_c: float) -> list[tuple[str, str, str]]:
+    """.md D6 koşulları ve bu değerlerle ilgili sayılar: (formül, koşul, değer metni).
+
+    "≫" ve "≲" için sayısal eşik tanımlanmamıştır; değerlendirme kullanıcıya bırakılır.
+    """
+    ratio, ca = f"{R / l_c:.3g}".replace(".", ","), f"{Ca:.3g}".replace(".", ",")
+    return [
+        ("D7a", "R ≫ ℓ_c ve Ca < 0,1", f"R/ℓ_c = {ratio}, Ca = {ca}"),
+        ("D7b", "R ≲ ℓ_c", f"R/ℓ_c = {ratio}"),
+        ("D7c", "Ca ≫ 1", f"Ca = {ca}"),
+    ]
 
 
 # --- D8 --------------------------------------------------------------------------------
 
-def stop_thickness(tau_y: float, rho_p: float, g: float) -> float:
-    """h_dur = τ_y / (ρ_p·g)."""
-    return tau_y / (rho_p * g)
+def stop_thickness(tau_y: float, rho_p: float, g: float, C_dur: float) -> float:
+    """h_dur = C_dur·τ_y / (ρ_p·g)."""
+    return C_dur * tau_y / (rho_p * g)
 
 
 def drained_profile(x, t_drain: float, h0: float, eta: float, rho_p: float, g: float,
                     h_stop: float) -> np.ndarray:
-    """D8: süzülme sonrası h(x), x üst uçtan mesafe [m].
+    """D8: süzülme sonrası h(x) = √(ηx/(ρ_p g t)), x üst uçtan mesafe [m].
 
     Film h_0'ı aşamaz; h_dur < h_0 ise h_dur'un altına inemez; h_dur ≥ h_0 ise film akmaz.
     """

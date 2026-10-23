@@ -9,7 +9,7 @@ from physics.units import from_si
 from ui import state
 from ui.common import COLORS, assumptions, draft_banner, explain, num, show_fig
 
-st.title("2. Mandrel ön ısıtma (D1)")
+st.title("1. Mandrel ön ısıtma (D1)")
 st.markdown("Mandrelin fırında ne kadar sürede istenen sıcaklığa geldiğini **toplu kütle modeli** "
             "ile hesaplar. Model, mandrelin içinde sıcaklığın her yerde aynı olduğunu varsayar; "
             "bu varsayım Biot sayısı 0,1'den küçükse geçerlidir.")
@@ -19,7 +19,7 @@ st.latex(r"T_m(t) = T_{\text{fırın}} - (T_{\text{fırın}} - T_0)\, e^{-t/\tau
 v = state.require_ready()
 s = state.settings()
 draft_banner(v, s)
-p = state.nominal_si()
+p = state.values_si()
 C = lambda T: from_si(T, "°C")  # noqa: E731
 
 R = p["ID"] / 2
@@ -60,7 +60,7 @@ elif s.T_m0_mode == "direct" and t_reach > p["t_pre"]:
 elif s.T_m0_mode == "direct" and res["T_m_end"] - target > 5:
     st.info(f"Girilen t_ön = {num(p['t_pre'], 0)} s ile mandrel {num(C(res['T_m_end']), 1)} °C'ye "
             f"çıkar; hesaplarda ise doğrudan girilen T_m0 = {num(C(target), 1)} °C kullanılıyor. "
-            f"İkisini tutarlı yapmak için t_ön'ü yaklaşık {num(t_reach, 0)} s yap ya da Parametre "
+            f"İkisini tutarlı yapmak için t_ön'ü yaklaşık {num(t_reach, 0)} s yap ya da Veri "
             "girişi sayfasında T_m0'ı **D1'den hesapla** seçeneğine geç.")
 
 t_max = max(1.3 * p["t_pre"], 5 * tau, 1.2 * t_reach if math.isfinite(t_reach) else 0)

@@ -1,47 +1,27 @@
 import streamlit as st
 
-from physics.units import from_si, to_si
+from physics.units import from_si
 from ui import charts, compute, state
 from ui.common import assumptions, draft_banner, explain, num, show_fig
 
-st.title("5. Toplam ve spiralli cidar (D9, D11)")
+st.title("4. Toplam ve spiralli cidar (D9, D11)")
 st.markdown("Jel katmanı ile sürüklenen filmin toplamı kürde biraz çeker (D9). Spiralli tüpte cidar iki "
             "daldırma ve aradaki yay telinden oluşur (D11). Sonuç şartnamedeki hedefle karşılaştırılır.")
 
 v = state.require_ready()
 s = state.settings()
 draft_banner(v, s)
-p = state.nominal_si()
+p = state.values_si()
 mm = lambda x: from_si(x, "mm")  # noqa: E731
 degC = lambda T: from_si(T, "°C")  # noqa: E731
 
-# --- 2. daldırma ayarları (hesaptan önce) ---------------------------------------------
 if s.spiral:
-    with st.container(border=True):
-        st.markdown("**Spiralli tüp: iki daldırma modeli**  \n"
-                    "1. daldırma: çıplak mandrel → s_1. Ardından yay teli sarılır. "
-                    "2. daldırma: plastisolle temas eden yüzey R + s_1 + d_tel; 1. kat ve tel bölgesi "
-                    "plastisol özellikleriyle tek katı katman sayılır (tel ihmal edilir). "
-                    "w = s_1 + d_tel + s_2.")
-        d2 = compute.dip2_overrides()
-        separate = st.checkbox("2. daldırma için ayrı T_m0 ve t_bekleme gir",
-                               value=d2["T_m0_2"] is not None or d2["t_wait_2"] is not None,
-                               help="İşaretli değilse 2. daldırma 1. daldırmayla aynı değerlerle yapılır.")
-        if separate:
-            T1 = compute.run(T_m0_2=None, t_wait_2=None).T_m0   # 1. daldırmanın T_m0'ı (D1 modunda da)
-            c1, c2 = st.columns(2)
-            T2 = c1.number_input("T_m0,2 – 2. daldırmada mandrel sıcaklığı [°C]", min_value=0.0, max_value=500.0,
-                                 value=float(degC(d2["T_m0_2"] if d2["T_m0_2"] is not None else T1)), step=5.0)
-            t2 = c2.number_input("t_bekleme,2 – 2. daldırmada bekleme süresi [s]", min_value=0.1, max_value=3600.0,
-                                 value=float(d2["t_wait_2"] if d2["t_wait_2"] is not None else p["t_wait"]), step=1.0)
-            if to_si(T2, "°C") <= p["T_g"]:
-                st.warning("T_m0,2 ≤ T_g: 2. daldırmada jel oluşmaz, yalnızca film sürüklenir.")
-            d2.update(T_m0_2=to_si(T2, "°C"), t_wait_2=t2)
-        else:
-            d2.update(T_m0_2=None, t_wait_2=None)
+    st.info("**Spiralli tüp: iki daldırma modeli.** 1. daldırma: çıplak mandrel → s_1. Ardından yay teli "
+            "sarılır. 2. daldırma: plastisolle temas eden yüzey R + s_1 + d_tel. 2. daldırmanın girdileri "
+            "(T_m0,2, T_s1, T_t, t_bekleme,2) **0. Veri girişi → Tel / 2. daldırma** sekmesindedir. "
+            "w = s_1 + d_tel + s_2.")
 else:
-    st.info("Spiral kapalı: tek daldırma hesaplanır, w = s_kür. Spirali Parametre girişi → Hesap ayarları'ndan açabilirsin.")
-
+    st.info("Spiral kapalı: tek daldırma hesaplanır, w = s_kür. Spirali 0. Veri girişi → Hesap ayarları'ndan açabilirsin.")
 res = compute.run()
 dips = [res.dip1] + ([res.dip2] if res.dip2 else [])
 
@@ -83,9 +63,7 @@ explain("Çubuk, tüp cidarını içten dışa katmanlarına ayırır: 1. daldı
         "bandın içindeyse tüp uygundur.")
 
 assumptions([
-    "Spiralli tüp iki daldırma olarak modellendi; tel ısıl olarak ihmal edildi, 1. kat + tel bölgesi "
-    "plastisol özellikleriyle tek katman sayıldı.",
+    "Spiralli tüp iki daldırma olarak modellendi; 2. daldırmada 1. kat + tel bölgesi plastisol "
+    "özellikleriyle tek katman sayıldı (tel halkası modeli bir sonraki revizyonda eklenecek).",
     "Kür çekmesi kalınlığa doğrudan (1 − ε) ile uygulandı (D9).",
-    "Tel, cidara çapı kadar (d_tel) eklendi; telin plastisole gömülmesi ve sarım aralığı hesaba katılmadı.",
-] + (["2. daldırma T_m0 ve t_bekleme 1. daldırmayla aynı."] if res.dip2 is not None
-     and compute.dip2_overrides()["T_m0_2"] is None else []))
+])

@@ -14,25 +14,22 @@ state.init()
 PAGES = {
     "Başlangıç": [
         st.Page("sayfalar/p0_giris.py", title="Nasıl kullanılır?", icon="🏠", default=True),
-        st.Page("sayfalar/p1_parametre.py", title="1. Parametre girişi", icon="📝",
-                url_path="parametre"),
+        st.Page("sayfalar/p1_parametre.py", title="0. Veri girişi", icon="📝", url_path="veri"),
     ],
     "Hesap adımları": [
-        st.Page("sayfalar/p2_onisitma.py", title="2. Mandrel ön ısıtma (D1)", icon="🔥",
+        st.Page("sayfalar/p2_onisitma.py", title="1. Mandrel ön ısıtma (D1)", icon="🔥",
                 url_path="onisitma"),
-        st.Page("sayfalar/p3_jel.py", title="3. Jel katmanı (D2–D4)", icon="🧊", url_path="jel"),
-        st.Page("sayfalar/p4_film.py", title="4. Sürüklenen film (D5–D8)", icon="💧", url_path="film"),
-        st.Page("sayfalar/p5_toplam.py", title="5. Toplam cidar (D9, D11)", icon="📏", url_path="toplam"),
-        st.Page("sayfalar/p6_tartim.py", title="6. Tartım doğrulama (D10)", icon="⚖️", url_path="tartim"),
+        st.Page("sayfalar/p3_jel.py", title="2. Jel katmanı (D2–D4)", icon="🧊", url_path="jel"),
+        st.Page("sayfalar/p4_film.py", title="3. Sürüklenen film (D5–D8)", icon="💧", url_path="film"),
+        st.Page("sayfalar/p5_toplam.py", title="4. Toplam cidar (D9, D11)", icon="📏", url_path="toplam"),
+        st.Page("sayfalar/p6_tartim.py", title="5. Tartımla doğrulama (D10)", icon="⚖️", url_path="tartim"),
     ],
     "Analiz": [
-        st.Page("sayfalar/p7_montecarlo.py", title="7. Belirsizlik – Monte Carlo (D12)", icon="🎲",
-                url_path="montecarlo"),
-        st.Page("sayfalar/p8_ters.py", title="8. Ters tasarım (ayar haritası)", icon="🗺️",
+        st.Page("sayfalar/p8_ters.py", title="6. Ters tasarım (ayar haritası)", icon="🗺️",
                 url_path="ters-tasarim"),
     ],
     "Sonuç": [
-        st.Page("sayfalar/p9_numara.py", title="9. Numara bazında sonuçlar ve rapor", icon="📄",
+        st.Page("sayfalar/p9_numara.py", title="7. Numara bazında sonuçlar ve rapor", icon="📄",
                 url_path="rapor"),
     ],
 }

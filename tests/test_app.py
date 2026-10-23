@@ -33,10 +33,17 @@ def test_parameter_page_example_and_draft():
     assert "hata" in _texts(at)                   # boş tablo
     next(b for b in at.button if "Örnek" in b.label).click().run()
     assert not at.exception
-    assert "kaynaksız" in _texts(at)              # örnek değerler kaynaksız
+    assert "Film formülü seçilmemiş" in _texts(at)     # seçim kullanıcıya bırakılır
+    _choose_film(at)
+    assert "kaynaksız" in _texts(at)              # örnek değerlerin bir kısmı kaynaksız
     at.sidebar.toggle[0].set_value(True).run()
     assert not at.exception
     assert "hesaba hazır" in _texts(at)
+
+
+def _choose_film(at, model="D7a"):
+    next(r for r in at.radio if r.label == "Kullanılacak film formülü").set_value(model).run()
+    assert not at.exception, at.exception
 
 
 def _ready_app():
@@ -44,6 +51,7 @@ def _ready_app():
     at = _app()
     at.switch_page("sayfalar/p1_parametre.py").run()
     next(b for b in at.button if "Örnek" in b.label).click().run()
+    _choose_film(at)
     at.sidebar.toggle[0].set_value(True).run()
     assert not at.exception
     return at
@@ -61,18 +69,6 @@ def test_calculation_pages_run(page):
     assert not [e for e in at.error if "Uygun değil" not in e.value], [e.value for e in at.error]
 
 
-def test_monte_carlo_page_runs():
-    at = _ready_app()
-    at.switch_page("sayfalar/p7_montecarlo.py").run()
-    assert not at.exception
-    at.number_input[0].set_value(30).run()
-    next(b for b in at.button if "çalıştır" in b.label).click().run()
-    assert not at.exception, at.exception
-    labels = [m.label for m in at.metric]
-    assert "P5" in labels and "Hedefi tutturma olasılığı" in labels
-    assert at.session_state["mc"]["res"].n_ok > 0
-
-
 def test_inverse_design_page_runs():
     at = _ready_app()
     at.switch_page("sayfalar/p8_ters.py").run()
@@ -87,34 +83,21 @@ def test_inverse_design_page_runs():
 
 def test_report_page_full_flow():
     at = _ready_app()
-    at.switch_page("sayfalar/p7_montecarlo.py").run()
-    at.number_input[0].set_value(30).run()
-    next(b for b in at.button if "çalıştır" in b.label).click().run()
     at.switch_page("sayfalar/p8_ters.py").run()
+
     at.select_slider[0].set_value(11).run()
     next(b for b in at.button if "Haritayı" in b.label).click().run()
     at.switch_page("sayfalar/p9_numara.py").run()
     assert not at.exception, at.exception
-    at.checkbox[0].check().run()                     # numara başına Monte Carlo
     next(b for b in at.button if "Tümünü" in b.label).click().run()
     assert not at.exception, at.exception
     res = at.session_state["numara_res"]
-    assert len(res) == 1 and "P5–P95 [mm]" in res.columns
+    assert len(res) == 1 and "s_toplam [mm]" in res.columns
     next(b for b in at.button if "raporu hazırla" in b.label).click().run()
     assert not at.exception, at.exception
     html_text = at.session_state["report_html"]
     assert html_text.startswith("<!doctype html>") and "Ana grafikler" in html_text
-    assert html_text.count('class="fig"') == 5      # jel, cidar, histogram, tornado, harita
-
-
-def test_total_page_separate_second_dip():
-    at = _ready_app()
-    at.switch_page("sayfalar/p5_toplam.py").run()
-    at.checkbox[0].check().run()
-    assert not at.exception
-    at.number_input[0].set_value(200.0).run()
-    assert not at.exception
-    assert len(at.number_input) == 2
+    assert html_text.count('class="fig"') == 3      # jel, cidar, harita
 
 
 @pytest.mark.parametrize("page", CALC_PAGES)

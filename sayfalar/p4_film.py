@@ -8,7 +8,7 @@ from ui import compute, state
 from ui.common import COLORS, assumptions, draft_banner, explain, num, show_fig
 from ui.dips import select_dip
 
-st.title("4. Sürüklenen film (D5–D8)")
+st.title("3. Sürüklenen film (D5–D8)")
 st.markdown("Mandrel banyodan çekilirken jel katmanının üstüne ince bir **sıvı film** sürüklenir. "
             "Filmin kalınlığı viskoziteye, çekme hızına ve yüzey gerilimine bağlıdır; çekmeden sonra "
             "film yerçekimiyle aşağı süzülerek incelir.")
@@ -16,13 +16,13 @@ st.markdown("Mandrel banyodan çekilirken jel katmanının üstüne ince bir **s
 v = state.require_ready()
 draft_banner(v, state.settings())
 res = compute.run()
-p = state.nominal_si()
+p = state.values_si()
 dip = select_dip(res, "dip_film")
 fc = dip.film
 mm = lambda x: from_si(x, "mm")  # noqa: E731
 R_film = dip.R_s + dip.s_jel
 st.caption(f"Film, jel katmanının dış yüzeyine (yarıçap R_s + s_jel = {num(mm(R_film), 3)} mm) "
-           "sürüklenir; D7b ve formül seçiminde bu yarıçap kullanılır.")
+           "sürüklenir; D7b ve R/ℓ_c bu yarıçapla hesaplanır.")
 
 # --- D5 -------------------------------------------------------------------------------
 st.header("D5 – Viskozitenin sıcaklığa bağlılığı")
@@ -47,65 +47,50 @@ explain("Eğri plastisolün sıcaklık arttıkça nasıl akışkanlaştığını
         "sürüklenen film incelir.")
 
 # --- D6 -------------------------------------------------------------------------------
-st.header("D6 – Hangi film formülü geçerli?")
+st.header("D6 – Boyutsuz sayılar")
 st.latex(r"Ca = \frac{\eta U}{\gamma}, \qquad \ell_c = \sqrt{\frac{\gamma}{\rho_p g}}")
 c1, c2, c3 = st.columns(3)
-c1.metric("Kapiler sayı Ca", num(fc.Ca, 4), help="Viskoz kuvvetin yüzey gerilimine oranı. Küçükse düşük hız.")
+c1.metric("Kapiler sayı Ca", num(fc.Ca, 4), help="Viskoz kuvvetin yüzey gerilimine oranı.")
 c2.metric("Kapiler uzunluk ℓ_c", f"{num(mm(fc.l_c), 3)} mm")
-c3.metric("R / ℓ_c", num(R_film / fc.l_c, 2), help="1'den küçükse 'ince mandrel' (D7b), büyükse 'kalın mandrel' (D7a).")
-box = st.warning if fc.transition else st.success
-box(f"**Seçilen formül: {film.FORMULA_NAMES[fc.formula]}**\n\n{fc.reason}")
+c3.metric("R / ℓ_c", num(R_film / fc.l_c, 2), help="Filmin sürüklendiği yüzeyin yarıçapının kapiler uzunluğa oranı.")
+crit = film.md_criteria(R_film, fc.Ca, fc.l_c)
+st.markdown("**.md D6 koşulları** (bilgi amaçlı; \"≫\" ve \"≲\" için sayısal sınır tanımlı değildir, formülü "
+            "kullanıcı seçer):\n\n" + "\n".join(f"- **{k}**: {cond} → bu değerlerle {vals}" for k, cond, vals in crit))
+st.success(f"**Kullanılan formül (0. Veri girişinde seçildi): {film.FORMULA_NAMES[fc.formula]}**")
 
 # --- D7 -------------------------------------------------------------------------------
 st.header("D7 – Sürüklenen film kalınlığı")
-st.latex(r"\text{D7a: } h = 0{,}94 \frac{(\eta U)^{2/3}}{\gamma^{1/6} (\rho_p g)^{1/2}} \qquad "
-         r"\text{D7b: } h \approx 1{,}34\, R\, Ca^{2/3} \qquad "
-         r"\text{D7c: } h \approx 0{,}8 \sqrt{\frac{\eta U}{\rho_p g}}")
+st.latex(r"\text{D7a: } h = C_{LLD} \frac{(\eta U)^{2/3}}{\gamma^{1/6} (\rho_p g)^{1/2}} \qquad "
+         r"\text{D7b: } h = C_{fib}\, R\, Ca^{2/3} \qquad "
+         r"\text{D7c: } h = C_{grav} \sqrt{\frac{\eta U}{\rho_p g}}")
+st.caption(f"Katsayılar (0. Veri girişi → Model katsayıları): C_LLD = {num(p['C_lld'], 3)}, "
+           f"C_fib = {num(p['C_fib'], 3)}, C_grav = {num(p['C_grav'], 3)}")
 cols = st.columns(4)
 for col, key in zip(cols, ["D7a", "D7b", "D7c"]):
-    col.metric(key + (" ✔" if key == fc.formula else ""), f"{num(mm(fc.values[key]), 3)} mm")
-cols[3].metric("Kullanılan h_0", f"{num(mm(fc.h0), 3)} mm",
-               help="Çekme anındaki film kalınlığı (seçilen formül).")
-if fc.transition:
-    st.info(f"Geçiş bölgesi: aday formüllerin aralığı **{num(mm(fc.h_low), 3)} – {num(mm(fc.h_high), 3)} mm**. "
-            "Tek hesapta seçilen formül kullanılır; Monte Carlo bu aralıktan örnek alır.")
+    col.metric(key + (" ✔" if key == fc.formula or (fc.formula == "min_ac" and key in ("D7a", "D7c")) else ""),
+               f"{num(mm(fc.values[key]), 3)} mm")
+cols[3].metric("Kullanılan h_0", f"{num(mm(fc.h0), 3)} mm", help="Çekme anındaki film kalınlığı (seçilen formül).")
 
 U_now = p["U"]
 U = np.geomspace(min(0.05e-3, U_now / 5), max(20e-3, 5 * U_now), 240)
-vals = {k: np.empty_like(U) for k in ("D7a", "D7b", "D7c")}
-chosen = np.empty(U.size, dtype=object)
-trans = np.zeros(U.size, dtype=bool)
-for i, u in enumerate(U):
-    c = film.choose_film(R_film, dip.eta_b, u, p["gamma"], p["rho_p"], p["g"])
-    for k in vals:
-        vals[k][i] = c.values[k]
-    chosen[i], trans[i] = c.formula, c.transition
+vals = film.all_formulas(R_film, dip.eta_b, U, p["gamma"], p["rho_p"], p["g"], p["C_lld"], p["C_fib"], p["C_grav"])
 styles = {"D7a": COLORS["line"], "D7b": COLORS["ok"], "D7c": COLORS["accent"]}
 fig = go.Figure()
 for k, color in styles.items():
-    fig.add_scatter(x=U * 1e3, y=mm(vals[k]), name=f"{k} (tüm aralık)", line=dict(color=color, width=1, dash="dot"),
-                    legendgroup=k, showlegend=False)
-    y = np.where(chosen == k, mm(vals[k]), np.nan)
-    fig.add_scatter(x=U * 1e3, y=y, name=film.FORMULA_NAMES[k].split(" (")[0], legendgroup=k,
-                    line=dict(color=color, width=4))
-# Ca geçiş bandı
-U_lo, U_hi = film.CA_LOW * p["gamma"] / dip.eta_b, film.CA_HIGH * p["gamma"] / dip.eta_b
-fig.add_vrect(x0=U_lo * 1e3, x1=U_hi * 1e3, fillcolor="orange", opacity=0.12, line_width=0,
-              annotation_text="0,1 < Ca < 1 (geçiş)", annotation_position="top left")
+    fig.add_scatter(x=U * 1e3, y=mm(vals[k]), name=k, line=dict(color=color, width=1.5, dash="dot"))
+fig.add_scatter(x=U * 1e3, y=mm(vals[fc.formula]), name=f"Seçilen: {film.FORMULA_NAMES[fc.formula].split(' (')[0]}",
+                line=dict(color="black", width=4))
 fig.add_scatter(x=[U_now * 1e3], y=[mm(fc.h0)], mode="markers", name="Seçilen U",
                 marker=dict(size=14, color="black", symbol="star"))
 fig.update_layout(title="Film kalınlığı – çekme hızı", xaxis_title="Çekme hızı U [mm/s]",
                   yaxis_title="Film kalınlığı h_0 [mm]", xaxis_type="log", yaxis_type="log",
                   xaxis_dtick="D2", yaxis_dtick="D2")
 show_fig(fig, f"D7_h_U_daldirma{dip.index}")
-explain("Üç formülün verdiği film kalınlığı çekme hızına göre çizildi. Kalın çizgi, o hızda geçerli "
-        "kabul edilen formüldür; noktalı çizgiler formülün geçerli olmadığı yerlerdir. Turuncu bant "
-        "formüllerin arasında kalan geçiş bölgesidir. Yıldız seçilen çekme hızıdır: daha hızlı çekmek "
-        "daha kalın film demektir.")
-
+explain("Noktalı çizgiler üç formülün verdiği film kalınlığını, siyah kalın çizgi 0. Veri girişinde seçilen "
+        "formülü gösterir. Yıldız tablodaki çekme hızıdır: daha hızlı çekmek daha kalın film demektir.")
 # --- D8 -------------------------------------------------------------------------------
 st.header("D8 – Süzülme ve akma gerilmesi")
-st.latex(r"h(x,t) \approx \sqrt{\frac{\eta\, x}{\rho_p g\, t}}, \qquad h_{dur} \approx \frac{\tau_y}{\rho_p g}")
+st.latex(r"h(x,t) \approx \sqrt{\frac{\eta\, x}{\rho_p g\, t}}, \qquad h_{dur} = C_{dur}\,\frac{\tau_y}{\rho_p g}")
 L = p["L"]
 x = np.linspace(0, L, 400)
 args = (dip.h0, dip.eta_b, p["rho_p"], p["g"], dip.h_stop)
@@ -139,8 +124,7 @@ explain("Çekmeden sonra sıvı film yerçekimiyle aşağı akar; bu yüzden man
 
 assumptions([
     "D7 formülleri Newtonyen sıvı içindir; akma gerilmesi yalnızca D8'de hesaba katıldı.",
-    "Formül seçimi (proje kararı): Ca ≥ 1 → D7c, R ≤ ℓ_c → D7b, R > ℓ_c → D7a; 0,1 < Ca < 1 veya "
-    "ℓ_c < R < 3ℓ_c geçiş bölgesidir.",
+    "Film formülü ve katsayıları kullanıcı tarafından seçilir/girilir (0. Veri girişi → Model katsayıları).",
     "Film, jel katmanının dış yüzeyine sürüklenir (yarıçap R_s + s_jel).",
     "Süzülme çekme bittikten sonra başlar; çekme sırasındaki süzülme ve kürde akma ihmal edildi.",
     "Toplam kalınlıkta filmin daldırma boyu L boyunca ortalaması kullanılır.",

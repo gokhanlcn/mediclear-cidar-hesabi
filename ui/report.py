@@ -8,10 +8,10 @@ import html
 import pandas as pd
 import plotly.graph_objects as go
 
-from physics import montecarlo, params
+from physics import params
 from physics.model import ModelResult
 from physics.params import Settings
-from physics.symbols import PARAMS
+from physics.symbols import FILM_MODELS, PARAMS
 from physics.units import from_si
 from ui import charts
 from ui.common import DISCLAIMER, num, style_fig
@@ -20,11 +20,10 @@ ASSUMPTIONS = [
     "Toplam kalınlık = jel katmanı (D3, ısı iletimi) + sürüklenen film (D7, D8); kürde (1 − ε) ile çeker (D9).",
     "Jelleşme gizli ısısı, banyodaki konveksiyon ve sıcaklığa bağlı özellik değişimi ihmal edildi.",
     "Jelleşme geri dönüşsüz kabul edildi; D3 Crank–Nicolson sonlu farklarla çözüldü.",
-    "D7 formül seçimi: Ca ≥ 1 → D7c, R ≤ ℓ_c → D7b, R > ℓ_c → D7a; 0,1 < Ca < 1 veya ℓ_c < R < 3ℓ_c "
-    "geçiş bölgesi (Monte Carlo bu aralıktan örnekler).",
+    "Film formülü ve tüm model katsayıları (C_LLD, C_fib, C_grav, C_dur) kullanıcı tarafından seçilir/girilir; "
+    "değerleri ve kaynakları girdi tablosundadır.",
     "Film, jel yüzeyine (R_s + s_jel) sürüklenir; toplamda L boyunca ortalama film kalınlığı kullanılır.",
-    "Spiralli tüp iki daldırma olarak modellendi; 1. kat + tel bölgesi plastisol özellikleriyle tek katman, "
-    "tel ısıl olarak ihmal edildi. w = s_1 + d_tel + s_2.",
+    "Spiralli tüp iki daldırma olarak modellendi; w = s_1 + d_tel + s_2.",
     "D1 (toplu kütle) yalnızca dolu mandrelde, Bi < 0,1 iken geçerli; fırından banyoya transferde soğuma ihmal edildi.",
 ]
 
@@ -83,7 +82,7 @@ def _fig_html(fig: go.Figure, first: bool, height: int = 300) -> str:
 
 
 def build_report(df: pd.DataFrame, s: Settings, res: ModelResult, p: dict,
-                 numara: pd.DataFrame | None = None, mc: dict | None = None, ters: dict | None = None) -> str:
+                 numara: pd.DataFrame | None = None, ters: dict | None = None) -> str:
     mm = lambda x: from_si(x, "mm")  # noqa: E731
     v = params.validate(df, s)
     now = _dt.datetime.now().strftime("%d.%m.%Y %H:%M")
@@ -100,7 +99,7 @@ def build_report(df: pd.DataFrame, s: Settings, res: ModelResult, p: dict,
     parts.append("<h2>1. Ayarlar ve ana sonuç</h2>"
                  f"<div>Malzeme: <b>{s.material_type}</b> · Mandrel: <b>{html.escape(s.mandrel_material)}</b> · "
                  f"Spiral: <b>{'evet (iki daldırma)' if s.spiral else 'hayır (tek daldırma)'}</b> · "
-                 f"T_m0: <b>{mode}</b></div>")
+                 f"T_m0: <b>{mode}</b> · Film formülü: <b>{html.escape(FILM_MODELS.get(s.film_model, '–'))}</b></div>")
     status = "<b class='ok'>✔ Uygun</b>" if res.ok else "<b class='bad'>✘ Uygun değil</b>"
     parts.append("<div class='kpis'>"
                  f"<div class='kpi'>Hesaplanan cidar w<b>{num(mm(res.w), 3)} mm</b></div>"
@@ -111,41 +110,19 @@ def build_report(df: pd.DataFrame, s: Settings, res: ModelResult, p: dict,
     dips = [res.dip1] + ([res.dip2] if res.dip2 else [])
     rows = [{"Daldırma": f"{d.index}.", "T_m0 [°C]": from_si(d.T_m0, "°C"), "t_bekleme [s]": d.t_wait,
              "s_max (D2) [mm]": mm(d.s_max), "s_jel (D3) [mm]": mm(d.s_jel), "C (D4)": d.C,
-             "D7 formülü": d.film.formula + (" (geçiş)" if d.film.transition else ""),
+             "D7 formülü": d.film.formula,
              "h_0 [mm]": mm(d.h0), "h ort. (D8) [mm]": mm(d.h), "s_kür (D9) [mm]": mm(d.s_kur)} for d in dips]
     dd = pd.DataFrame(rows).round(4)
     parts.append(_table(dd, num_cols=set(dd.columns) - {"Daldırma", "D7 formülü"}))
 
-    if mc is not None:
-        mcr = mc["res"]
-        y = mcr.outputs[mc.get("out_key", "w")].to_numpy()
-        pct = montecarlo.percentiles(y)
-        prob = montecarlo.hit_probability(y, res.w_target, res.w_tol)
-        parts.append("<div class='kpis'>"
-                     f"<div class='kpi'>Monte Carlo P5<b>{num(mm(pct['P5']), 3)} mm</b></div>"
-                     f"<div class='kpi'>Medyan<b>{num(mm(pct['medyan']), 3)} mm</b></div>"
-                     f"<div class='kpi'>P95<b>{num(mm(pct['P95']), 3)} mm</b></div>"
-                     f"<div class='kpi'>Hedefi tutturma olasılığı<b>%{num(100 * prob, 0)}</b></div>"
-                     f"<div class='kpi'>Deneme sayısı<b>{mcr.n_ok}</b></div></div>")
-
     if numara is not None and not numara.empty:
         parts.append("<h2>2. Numara bazında hedefler ve sonuçlar</h2>")
-        parts.append(_table(numara, num_cols={c for c in numara.columns if "[" in c and "P5" not in c}))
+        parts.append(_table(numara, num_cols={c for c in numara.columns if "[" in c}))
 
     # --- Grafikler ----------------------------------------------------------------------
     figs = [charts.gel_growth(res.dip1),
             charts.wall_composition(res, p["eps"], p.get("phi", 1.0) if s.material_type == "Organosol" else 1.0,
                                     p.get("d_wire", 0.0))]
-    if mc is not None:
-        mcr = mc["res"]
-        out_key = mc.get("out_key", "w")
-        y = mcr.outputs[out_key].to_numpy()
-        figs.append(charts.mc_histogram(y, montecarlo.percentiles(y),
-                                        (res.w_target, res.w_tol) if out_key == "w" else None,
-                                        "Monte Carlo – sonuç dağılımı"))
-        sens = montecarlo.sensitivity(mcr.samples, y, mc.get("keys"))
-        if not sens.empty:
-            figs.append(charts.tornado(sens, mcr.n_ok, top_n=8))
     if ters is not None:
         figs.append(charts.design_map(ters["dm"], ters.get("title", "Ters tasarım haritası"),
                                       nominal=(p["t_wait"], res.T_m0)))
@@ -155,10 +132,10 @@ def build_report(df: pd.DataFrame, s: Settings, res: ModelResult, p: dict,
 
     # --- Girdiler ------------------------------------------------------------------------
     keys = set(params.active_keys(s)) | {"T_fuz"}
-    t = df[df.Kod.isin(keys)][["Kod", "Sembol", "Parametre", "Birim", "Min", "Nominal", "Max", "Kaynak", "Not"]]
+    t = df[df.Kod.isin(keys)][["Kod", "Sembol", "Parametre", "Birim", params.VALUE_COL, "Kaynak", "Not"]]
     missing = set(v.missing_source)
     parts.append("<h2>Girdiler ve kaynaklar</h2>")
-    parts.append(_table(t.drop(columns="Kod").reset_index(drop=True), num_cols={"Min", "Nominal", "Max"},
+    parts.append(_table(t.drop(columns="Kod").reset_index(drop=True), num_cols={params.VALUE_COL},
                         row_class=lambda i, r: "nosrc" if t.iloc[i].Kod in missing else ""))
     parts.append("<h2>Model varsayımları</h2><ul class='cols'>"
                  + "".join(f"<li>{html.escape(a)}</li>" for a in ASSUMPTIONS) + "</ul>")

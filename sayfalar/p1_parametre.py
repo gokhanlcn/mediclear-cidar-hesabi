@@ -4,60 +4,53 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from physics import film, params
-from physics.symbols import GROUPS, MATERIALS, PARAMS
+from physics.symbols import FILM_MODELS, GROUPS, MATERIALS, PARAMS
 from physics.units import from_si, to_si
 from ui import state
-from ui.common import COLORS, explain, show_fig
+from ui.common import COLORS, explain, num, show_fig
 
-st.title("1. Parametre girişi")
+st.title("0. Veri girişi")
 st.markdown(
-    "Aşağıdaki tablo .md dosyasındaki **Veri giriş tablosu**nun aynısıdır. **Nominal** sütunu tek "
-    "hesap için, **Min** ve **Max** belirsizlik analizi (Monte Carlo) için kullanılır. Her değerin "
-    "**Kaynak** sütununa nereden aldığını yaz (ör. \"Vinnolit TDS, s. 2\")."
+    "Hesapta kullanılan **her değer** bu sayfada girilir: malzeme özellikleri, proses ayarları, tel "
+    "verileri ve formüllerin katsayıları. Programın içinde gizli bir katsayı yoktur. Her satırın "
+    "**Kaynak** sütununa değeri nereden aldığını yaz (ör. \"Vinnolit TDS, s. 2\"). Satırların ne olduğu "
+    "**Açıklama** sütununda ve her sekmenin altındaki listede yazar."
 )
 
 s = state.settings()
 
 # --- Hızlı işlemler -------------------------------------------------------------------
-c1, c2, c3 = st.columns(3)
+c1, c2 = st.columns(2)
 if c1.button("📋 Örnek değerlerle doldur",
-             help="Tüm tabloyu .md'deki 'Tipik aralık' değerleriyle doldurur (mevcut değerlerin "
-                  "üzerine yazar). Değerler YAKLAŞIK'tır, kaynak sütunu boş kalır."):
+             help="Tabloyu örnek değerlerle doldurur (mevcut değerlerin üzerine yazar). Kaynağı belli "
+                  "olanlara kaynak yazılır, diğerleri YAKLAŞIK işaretlenir. Film formülü seçimi sana kalır."):
     state.set_df(params.apply_material(params.example_table(), s.mandrel_material)
                  if s.mandrel_material in MATERIALS else params.example_table())
-    st.toast("Örnek değerler yazıldı. Hepsi YAKLAŞIK – kaynağa göre teyit edin.", icon="📋")
-if c2.button("±%10 uygula",
-             help=".md kuralı: bir değer için tek kaynak varsa Min ve Max nominalin ±%10'u alınır. "
-                  "Yalnızca Min ve Max'ı boş (veya nominale eşit) satırlara uygulanır."):
-    new, changed = params.apply_pm10(state.df())
-    state.set_df(new)
-    st.toast(f"{len(changed)} satıra ±%10 uygulandı." if changed else
-             "Min/Max'ı boş satır bulunamadı.", icon="✏️")
-if c3.button("🗑️ Tabloyu temizle",
-             help="Tüm değerleri, kaynakları ve notları siler."):
+    st.toast("Örnek değerler yazıldı. YAKLAŞIK olanları kaynağa göre teyit et.", icon="📋")
+if c2.button("🗑️ Tabloyu temizle", help="Tüm değerleri, kaynakları ve notları siler."):
     state.set_df(params.empty_table())
 
 # --- Ayarlar --------------------------------------------------------------------------
 with st.expander("⚙️ Hesap ayarları", expanded=True):
     a1, a2 = st.columns(2)
     mode = a1.radio(
-        "Daldırma anındaki mandrel sıcaklığı (T_m0)",
+        "1. daldırmada mandrel sıcaklığı (T_m0)",
         ["Doğrudan gir", "D1'den hesapla (ön ısıtma fırını)"],
         index=0 if s.T_m0_mode == "direct" else 1,
         help="D1'den hesaplanırsa T_m0 = fırında t_ön süre sonra ulaşılan sıcaklık. "
              "D1 yalnızca dolu mandrel (R_i = 0) için geçerlidir.")
     s.T_m0_mode = "direct" if mode == "Doğrudan gir" else "D1"
-    kind = a2.radio("Malzeme tipi", ["Plastisol", "Organosol"],
-                    index=0 if s.material_type == "Plastisol" else 1,
-                    help="Organosolde (solventli) kuruyunca yalnızca katı kısım kalır: h_kuru = φ·h (D9).")
-    s.material_type = kind
+    s.material_type = a2.radio("Malzeme tipi", ["Plastisol", "Organosol"],
+                               index=0 if s.material_type == "Plastisol" else 1,
+                               help="Organosolde (solventli) kuruyunca yalnızca katı kısım kalır: h_kuru = φ·h (D9).")
     s.spiral = a1.checkbox(
         "Spiralli tüp (iki daldırma + yay teli)", value=s.spiral,
-        help="İşaretliyse cidar w = s_1 + d_tel + s_2 olarak iki daldırmayla hesaplanır (D11).")
+        help="İşaretliyse cidar w = s_1 + d_tel + s_2 olarak iki daldırmayla hesaplanır (D11). "
+             "Tel / 2. daldırma sekmesindeki değerler bu durumda gereklidir.")
     mats = list(MATERIALS) + ["Diğer"]
     mat = a2.selectbox("Mandrel malzemesi", mats,
                        index=mats.index(s.mandrel_material) if s.mandrel_material in mats else 0,
-                       help="Seçince ρ_m, c_m ve k_m için önerilen değerler yazılabilir.")
+                       help="Seçince ρ_m, c_m ve k_m için malzeme tablosu değerleri yazılır.")
     if mat != s.mandrel_material:
         s.mandrel_material = mat
         if mat in MATERIALS:
@@ -67,20 +60,19 @@ with st.expander("⚙️ Hesap ayarları", expanded=True):
 # --- Tablolar -------------------------------------------------------------------------
 v = state.validation()
 active = params.active_keys(s)
-SHOW = ["Durum", "Sembol", "Parametre", "Birim", "Min", "Nominal", "Max", "Kaynak", "Not", "Açıklama"]
+VAL = params.VALUE_COL
+SHOW = ["Durum", "Sembol", "Parametre", "Birim", VAL, "Kaynak", "Not", "Açıklama"]
 LOCKED = ["Durum", "Sembol", "Parametre", "Birim", "Açıklama"]
 COLCFG = {
     "Durum": st.column_config.TextColumn(width="small", help="🟢 tamam · 🟡 kaynak yok · "
                                          "🔴 hata · ⚪ bu ayarlarla kullanılmıyor"),
     "Sembol": st.column_config.TextColumn(width="small"),
     "Birim": st.column_config.TextColumn(width="small"),
-    "Min": st.column_config.NumberColumn(help="Monte Carlo için en küçük olası değer"),
-    "Nominal": st.column_config.NumberColumn(help="Tek hesapta kullanılan değer"),
-    "Max": st.column_config.NumberColumn(help="Monte Carlo için en büyük olası değer"),
+    VAL: st.column_config.NumberColumn(help="Hesapta kullanılan değer (Birim sütunundaki birimle)"),
     "Kaynak": st.column_config.TextColumn(width="medium", help="Değerin alındığı belge (TDS, kitap, "
                                           "şartname…). Boşsa satır sarı görünür."),
     "Not": st.column_config.TextColumn(width="medium"),
-    "Açıklama": st.column_config.TextColumn(width="large", help="Parametrenin kısa açıklaması"),
+    "Açıklama": st.column_config.TextColumn(width="large", help="Parametrenin ne olduğu"),
 }
 
 
@@ -97,65 +89,111 @@ def _apply_edits(group: str, key: str) -> None:
     state.set_df(params.apply_editor_changes(state.df(), group, edits))
 
 
-tabs = st.tabs([f"{g}" for g in GROUPS])
+def _editor(group: str) -> None:
+    key = f"editor_{group}_{st.session_state['table_ver']}"
+    st.data_editor(_view(group), key=key, hide_index=True, width="stretch",
+                   disabled=LOCKED, column_config=COLCFG, num_rows="fixed",
+                   on_change=_apply_edits, args=(group, key))
+    with st.expander("Bu sekmedeki değerler: ne oldukları, tipik değerleri ve nereden bulunurlar"):
+        for k in [k for k in params.TABLE_KEYS if PARAMS[k].group == group]:
+            p = PARAMS[k]
+            st.markdown(f"- **{p.sym}** – {p.name} [{p.unit}] · *Denklem:* {p.eqs} · "
+                        f"*Tipik:* {p.typical} · *Nereden:* {p.source_hint}  \n  {p.help}")
+
+
+def _ea_helper() -> None:
+    with st.expander("🧮 E_a yardımcısı – viskozite–sıcaklık eğrisinden E_a hesapla"):
+        st.markdown("TDS'deki viskozite–sıcaklık eğrisinden en az iki nokta oku ve aşağıya yaz. "
+                    "Program D5'i (Arrhenius) bu noktalara uydurup E_a'yı bulur.")
+        pts = st.data_editor(pd.DataFrame({"T (°C)": [25.0, 35.0, 45.0], "η (Pa·s)": [None, None, None]},
+                                          dtype=float), key="ea_points", num_rows="dynamic", hide_index=True)
+        pts = pts.dropna()
+        if len(pts) < 2:
+            st.caption("Sonucu görmek için en az iki satıra viskozite değeri yaz.")
+            return
+        try:
+            T_K = to_si(pts["T (°C)"].to_numpy(), "°C")
+            E_a, eta_ref, T_ref = film.fit_activation_energy(T_K, pts["η (Pa·s)"].to_numpy())
+        except ValueError as exc:
+            st.error(str(exc))
+            return
+        st.success(f"E_a ≈ **{E_a:,.0f} J/mol** ({E_a / 1000:.1f} kJ/mol) · η_ref = {eta_ref:.3g} Pa·s, "
+                   f"T_ref = {from_si(T_ref, '°C'):g} °C".replace(",", "."))
+        Tc = np.linspace(pts["T (°C)"].min(), pts["T (°C)"].max(), 100)
+        fig = go.Figure()
+        fig.add_scatter(x=pts["T (°C)"], y=pts["η (Pa·s)"], mode="markers", name="TDS'den okunan nokta",
+                        marker=dict(size=10, color=COLORS["accent"]))
+        fig.add_scatter(x=Tc, y=film.viscosity(eta_ref, E_a, to_si(Tc, "°C"), T_ref), name="D5 uydurması",
+                        line=dict(color=COLORS["line"]))
+        fig.update_layout(title="Viskozite – sıcaklık (D5)", xaxis_title="Sıcaklık T [°C]",
+                          yaxis_title="Viskozite η [Pa·s]")
+        show_fig(fig, "Ea_uydurma", height=320)
+        explain("Kırmızı noktalar veri sayfasından okuduğun değerler, mavi eğri D5 formülünün bu noktalara "
+                "en iyi uyan hali. Eğri noktalardan çok sapıyorsa okuma hatası olabilir; noktaları kontrol et.")
+        also = st.checkbox("η_ref ve T_ref'i de ilk noktadan yaz", value=False)
+        if st.button("E_a'yı tabloya yaz"):
+            df = state.df().copy()
+            df.loc[df.Kod == "E_a", VAL] = round(E_a)
+            df.loc[df.Kod == "E_a", "Not"] = "E_a yardımcısıyla viskozite–sıcaklık eğrisinden uyduruldu"
+            if also:
+                df.loc[df.Kod == "eta_ref", VAL] = eta_ref
+                df.loc[df.Kod == "T_ref", VAL] = from_si(T_ref, "°C")
+            state.set_df(df)
+            st.rerun()
+
+
+def _film_model_panel() -> None:
+    st.markdown("#### Film formülü seçimi")
+    st.markdown("Program hangi film formülünün geçerli olduğuna **kendisi karar vermez**. Aşağıdaki "
+                "boyutsuz sayılar ve .md'deki koşullar seçimine yardımcı olur.")
+    st.latex(r"Ca = \frac{\eta U}{\gamma}, \qquad \ell_c = \sqrt{\frac{\gamma}{\rho_p g}}")
+    vals = state.values_si()
+    need = ["eta_ref", "E_a", "T_b", "T_ref", "U", "gamma", "rho_p", "g", "ID"]
+    if all(k in vals for k in need):
+        eta = float(film.viscosity(vals["eta_ref"], vals["E_a"], vals["T_b"], vals["T_ref"]))
+        R = vals["ID"] / 2
+        Ca = film.capillary_number(eta, vals["U"], vals["gamma"])
+        lc = film.capillary_length(vals["gamma"], vals["rho_p"], vals["g"])
+        c1, c2 = st.columns(2)
+        c3, c4 = st.columns(2)
+        c1.metric("η(T_b)", f"{num(eta, 3)} Pa·s")
+        c2.metric("Ca", num(Ca, 4))
+        c3.metric("ℓ_c", f"{num(lc * 1e3, 3)} mm")
+        c4.metric("R / ℓ_c (mandrel)", num(R / lc, 2),
+                  help="R = ID/2. Film jel yüzeyine sürüklendiği için hesapta yarıçap biraz daha büyüktür.")
+        st.markdown("**.md D6 koşulları** (\"≫\" ve \"≲\" için sayısal sınır tanımlı değildir; "
+                    "değerlendirme sana aittir):\n\n" + "\n".join(
+                        f"- **{k}**: {cond} → bu değerlerle {vals}" for k, cond, vals in film.md_criteria(R, Ca, lc)))
+    else:
+        st.caption("Ca ve ℓ_c'yi görmek için η_ref, E_a, T_b, T_ref, U, γ, ρ_p ve ID değerlerini gir.")
+    opts = [""] + list(FILM_MODELS)
+    choice = st.radio("Kullanılacak film formülü", opts, index=opts.index(s.film_model) if s.film_model in opts else 0,
+                      format_func=lambda k: "— seçilmedi —" if k == "" else FILM_MODELS[k],
+                      help="Seçilen formül her iki daldırmada da kullanılır. Formüllerin katsayıları "
+                           "aşağıdaki tabloda girilir.")
+    s.film_model = choice
+    st.latex(r"\text{D7a: } h = C_{LLD}\,\frac{(\eta U)^{2/3}}{\gamma^{1/6}(\rho_p g)^{1/2}} \qquad "
+             r"\text{D7b: } h = C_{fib}\,R\,Ca^{2/3}")
+    st.latex(r"\text{D7c: } h = C_{grav}\sqrt{\frac{\eta U}{\rho_p g}} \qquad "
+             r"\text{D8: } h_{dur} = C_{dur}\,\frac{\tau_y}{\rho_p g}")
+
+
+tabs = st.tabs(list(GROUPS))
 for tab, group in zip(tabs, GROUPS):
     with tab:
-        key = f"editor_{group}_{st.session_state['table_ver']}"
-        st.data_editor(_view(group), key=key, hide_index=True,
-                       disabled=LOCKED, column_config=COLCFG, num_rows="fixed",
-                       on_change=_apply_edits, args=(group, key))
-        with st.expander("Bu sekmedeki parametreler: tipik aralık ve nereden bulunur"):
-            for k in [k for k in params.TABLE_KEYS if PARAMS[k].group == group]:
-                p = PARAMS[k]
-                st.markdown(f"- **{p.sym}** – {p.name} [{p.unit}] · *Denklem:* {p.eqs} · "
-                            f"*Tipik:* {p.typical} · *Nereden:* {p.source_hint}  \n  {p.help}")
-
+        if group == "Tel / 2. daldırma" and not s.spiral:
+            st.info("Spiral kapalı (Hesap ayarları): bu sekmedeki değerler hesapta kullanılmıyor.")
+        if group == "Tel / 2. daldırma":
+            st.markdown("Spiralli tüpte 1. daldırmadan sonra yay teli sarılır ve 2. daldırma yapılır. "
+                        "2. daldırmada plastisolle temas eden yüzey telin tepesidir (R + s_1 + d_tel). "
+                        "Aşağıdaki sıcaklıklar mandrelin, iç katmanın ve telin **2. daldırmaya girerken** "
+                        "sahip olduğu sıcaklıklardır.")
+        if group == "Model katsayıları":
+            _film_model_panel()
+            st.markdown("#### Katsayılar")
+        _editor(group)
         if group == "Plastisol":
-            with st.expander("🧮 E_a yardımcısı – viskozite–sıcaklık eğrisinden E_a hesapla"):
-                st.markdown(
-                    "TDS'deki viskozite–sıcaklık eğrisinden en az iki nokta oku ve aşağıya yaz. "
-                    "Program D5'i (Arrhenius) bu noktalara uydurup E_a'yı bulur.")
-                pts = st.data_editor(
-                    pd.DataFrame({"T (°C)": [25.0, 35.0, 45.0], "η (Pa·s)": [None, None, None]},
-                                 dtype=float),
-                    key="ea_points", num_rows="dynamic", hide_index=True)
-                pts = pts.dropna()
-                if len(pts) >= 2:
-                    try:
-                        T_K = to_si(pts["T (°C)"].to_numpy(), "°C")
-                        E_a, eta_ref, T_ref = film.fit_activation_energy(T_K, pts["η (Pa·s)"].to_numpy())
-                        st.success(f"E_a ≈ **{E_a:,.0f} J/mol** ({E_a / 1000:.1f} kJ/mol) · "
-                                   f"η_ref = {eta_ref:.3g} Pa·s, T_ref = {from_si(T_ref, '°C'):g} °C"
-                                   .replace(",", "."))
-                        Tc = np.linspace(pts["T (°C)"].min(), pts["T (°C)"].max(), 100)
-                        fig = go.Figure()
-                        fig.add_scatter(x=pts["T (°C)"], y=pts["η (Pa·s)"], mode="markers",
-                                        name="TDS'den okunan nokta",
-                                        marker=dict(size=10, color=COLORS["accent"]))
-                        fig.add_scatter(x=Tc, y=film.viscosity(eta_ref, E_a, to_si(Tc, "°C"), T_ref),
-                                        name="D5 uydurması", line=dict(color=COLORS["line"]))
-                        fig.update_layout(xaxis_title="Sıcaklık T [°C]", yaxis_title="Viskozite η [Pa·s]",
-                                          title="Viskozite – sıcaklık (D5)")
-                        show_fig(fig, "Ea_uydurma", height=320)
-                        explain("Kırmızı noktalar veri sayfasından okuduğun değerler, mavi eğri D5 "
-                                "formülünün bu noktalara en iyi uyan hali. Eğri noktalardan çok "
-                                "sapıyorsa okuma hatası olabilir; noktaları kontrol et.")
-                        also = st.checkbox("η_ref ve T_ref'i de ilk noktadan yaz", value=False)
-                        if st.button("E_a'yı tabloya yaz"):
-                            df = state.df().copy()
-                            sel = df.Kod == "E_a"
-                            df.loc[sel, params.VALUE_COLS] = [np.nan, round(E_a), np.nan]
-                            df.loc[sel, "Not"] = ("E_a yardımcısıyla viskozite–sıcaklık eğrisinden "
-                                                  "uyduruldu; Min/Max'ı gir veya ±%10 uygula")
-                            if also:
-                                df.loc[df.Kod == "eta_ref", "Nominal"] = eta_ref
-                                df.loc[df.Kod == "T_ref", "Nominal"] = from_si(T_ref, "°C")
-                            state.set_df(df)
-                            st.rerun()
-                    except ValueError as exc:
-                        st.error(str(exc))
-                else:
-                    st.caption("Sonucu görmek için en az iki satıra viskozite değeri yaz.")
+            _ea_helper()
 
 # --- Doğrulama özeti ------------------------------------------------------------------
 st.subheader("Kontrol sonucu")
@@ -165,9 +203,9 @@ if v.errors:
     other = [i for i in v.errors if i not in empty]
     if empty:
         syms = ", ".join(PARAMS[i.key].sym for i in empty)
-        st.error(f"🔴 {len(empty)} parametrenin Nominal değeri boş: {syms}.\n\n"
-                 "Veri sayfasından değerleri bulup Nominal sütununa yaz. Elinde henüz veri yoksa "
-                 "yukarıdaki **Örnek değerlerle doldur** düğmesine bas.")
+        st.error(f"🔴 {len(empty)} parametrenin değeri boş: {syms}.\n\n"
+                 "Kaynaktan değerleri bulup Değer sütununa yaz. Elinde henüz veri yoksa yukarıdaki "
+                 "**Örnek değerlerle doldur** düğmesine bas.")
     if other:
         st.error(f"🔴 {len(other)} hata var – düzeltilmeden hesap yapılamaz:\n\n"
                  + "\n".join(f"- {i.message}" for i in other))
@@ -190,10 +228,10 @@ st.subheader("Kaydet / yükle")
 st.markdown("Veri setini kaydedip grup arkadaşlarınla paylaşabilir, sonra buradan geri yükleyebilirsin.")
 k1, k2 = st.columns(2)
 k1.download_button("💾 Excel olarak kaydet", params.to_excel_bytes(state.df(), s),
-                   file_name="mediclear_parametreler.xlsx",
+                   file_name="mediclear_veriler.xlsx", width="stretch",
                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 k2.download_button("💾 CSV olarak kaydet", params.to_csv_bytes(state.df()),
-                   file_name="mediclear_parametreler.csv", mime="text/csv")
+                   file_name="mediclear_veriler.csv", mime="text/csv", width="stretch")
 up = st.file_uploader("Kaydedilmiş dosyayı yükle (.xlsx veya .csv)", type=["xlsx", "csv"])
 if up is not None and st.session_state.get("last_upload") != up.file_id:
     st.session_state["last_upload"] = up.file_id

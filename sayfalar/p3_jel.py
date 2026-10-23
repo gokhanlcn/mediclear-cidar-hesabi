@@ -8,7 +8,7 @@ from ui import charts, compute, state
 from ui.dips import select_dip
 from ui.common import COLORS, assumptions, draft_banner, explain, num, show_fig
 
-st.title("3. Jel katmanı (D2, D3, D4)")
+st.title("2. Jel katmanı (D2, D3, D4)")
 st.markdown("Sıcak mandrel banyoya girince ısısını plastisole verir; sıcaklığı **T_g**'yi geçen "
             "plastisol jelleşir. Bu sayfa jel katmanının kalınlığını üç yolla hesaplar: enerji tavanı "
             "(D2, üst sınır), ısı iletimi modeli (D3, asıl sonuç) ve difüzyon yaklaşımı (D4, kontrol).")
@@ -18,7 +18,7 @@ s = state.settings()
 draft_banner(v, s)
 compute.quality_selector()
 res = compute.run()
-p = state.nominal_si()
+p = state.values_si()
 mm = lambda x: from_si(x, "mm")  # noqa: E731
 degC = lambda T: from_si(T, "°C")  # noqa: E731
 

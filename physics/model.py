@@ -4,7 +4,7 @@ Spiralli tüp iki daldırma olarak modellenir:
 * 1. daldırma: çıplak mandrel → s_1 (= s_kür).
 * 2. daldırma: plastisolle temas eden yüzey R + s_1 + d_tel. R ile bu yüzey arasındaki bölge
   (önceki kat + tel bölgesi) plastisol özellikleriyle katı katman sayılır; tel ihmal edilir.
-  Mandrel ve bu katman daldırmada T_m0,2 sıcaklığındadır.
+  Mandrel T_m0,2, bu katman T_s1 sıcaklığındadır (kullanıcı girdisi).
 * w = s_1 + d_tel + s_2.
 Sürüklenen film, plastisolle temas eden yüzeyin üstündeki jel katmanına (R_s + s_jel) çekilir.
 """
@@ -25,9 +25,7 @@ class Options:
     spiral: bool = True
     T_m0_mode: str = "direct"        # "direct" (doğrudan) | "D1" (ön ısıtmadan hesapla)
     quality: str = "normal"          # gel.QUALITY anahtarı
-    film_u: float | None = None      # Monte Carlo: geçiş bölgesinde film örneği (0..1)
-    T_m0_2: float | None = None      # 2. daldırma mandrel sıcaklığı [K]; None → 1. ile aynı
-    t_wait_2: float | None = None    # 2. daldırma bekleme süresi [s]; None → 1. ile aynı
+    film_model: str = ""             # kullanıcının seçtiği film formülü (symbols.FILM_MODELS)
     keep_details: bool = True        # D3 alanını (grafikler için) sakla
 
 
@@ -42,7 +40,7 @@ class DipResult:
     s_jel: float              # D3
     C: float                  # D4
     eta_b: float              # D5
-    film: film.FilmChoice     # D6, D7
+    film: film.FilmResult     # D6, D7
     h0: float                 # kullanılan çekme anı film kalınlığı
     h_stop: float             # D8 h_dur
     h: float                  # D8 boy boyunca ortalama
@@ -68,7 +66,7 @@ class ModelResult:
     warnings: list[str] = field(default_factory=list)
 
     def summary(self) -> dict[str, float]:
-        """Monte Carlo ve tablolar için skaler sonuçlar (SI)."""
+        """Tablolar için skaler sonuçlar (SI)."""
         d1, d2 = self.dip1, self.dip2
         out = {
             "T_m0": self.T_m0, "s_jel_1": d1.s_jel, "h_1": d1.h, "s_1": d1.s_kur,
@@ -118,12 +116,11 @@ def run_model(p: dict, opt: Options | None = None) -> ModelResult:
     d_wire = 0.0
     if opt.spiral:
         d_wire = p["d_wire"]
-        T2 = opt.T_m0_2 if opt.T_m0_2 is not None else T_m0
-        t2 = opt.t_wait_2 if opt.t_wait_2 is not None else p["t_wait"]
+        T2, t2 = p["T_m0_2"], p["t_wait_2"]
         R2 = R + dip1.s_kur + d_wire
         layers = [gel.Layer(p["R_i"], R, p["rho_m"], p["c_m"], p["k_m"], T2, "mandrel")]
         if R2 > R:
-            layers.append(gel.Layer(R, R2, p["rho_p"], p["c_p"], p["k_p"], T2,
+            layers.append(gel.Layer(R, R2, p["rho_p"], p["c_p"], p["k_p"], p["T_s1"],
                                     "1. kat + tel bölgesi"))
         dip2 = _dip(2, layers, p, T2, t2, opt)
         w = wall.spiral_wall(dip1.s_kur, d_wire, dip2.s_kur)
@@ -154,9 +151,13 @@ def _dip(index: int, layers: list[gel.Layer], p: dict, T_m0: float, t_wait: floa
     C = gel.fit_diffusion_coefficient(g_res.t, g_res.s_gel, g_res.alpha_p)
 
     eta_b = float(film.viscosity(p["eta_ref"], p["E_a"], p["T_b"], p["T_ref"]))
-    choice = film.choose_film(R_s + s_jel, eta_b, p["U"], p["gamma"], p["rho_p"], p["g"])
-    h0 = choice.sample(opt.film_u) if opt.film_u is not None else choice.h0
-    h_stop = film.stop_thickness(p["tau_y"], p["rho_p"], p["g"])
+    try:
+        choice = film.film_thickness(opt.film_model, R_s + s_jel, eta_b, p["U"], p["gamma"],
+                                     p["rho_p"], p["g"], p["C_lld"], p["C_fib"], p["C_grav"])
+    except ValueError as exc:
+        raise ModelError(str(exc)) from exc
+    h0 = choice.h0
+    h_stop = film.stop_thickness(p["tau_y"], p["rho_p"], p["g"], p["C_dur"])
     args = (p["t_drain"], h0, eta_b, p["rho_p"], p["g"], h_stop)
     h = film.drained_mean(p["L"], *args)
     h_top, h_bottom = film.drained_profile([0.0, p["L"]], *args)

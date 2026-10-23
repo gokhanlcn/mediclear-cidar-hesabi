@@ -12,7 +12,7 @@ st.markdown(
 with st.container(border=True):
     st.subheader("Nasıl kullanılır?")
     st.markdown(
-        "1. **Verileri gir.** Sol menüden *1. Parametre girişi* sayfasını aç. Elinde veri yoksa "
+        "1. **Verileri gir.** Sol menüden *0. Veri girişi* sayfasını aç. Elinde veri yoksa "
         "**Örnek değerlerle doldur** düğmesine bas; her değerin yanına bulduğun **kaynağı** yaz.\n"
         "2. **Sayfaları sırayla gez.** Her sayfa bir hesap adımını (D1, D2 …) grafiklerle gösterir. "
         "Grafiklerin altındaki *Bu grafik ne gösteriyor?* kutusu ne göreceğini anlatır.\n"
@@ -29,4 +29,4 @@ with st.container(border=True):
         "- **YAKLAŞIK** notu – örnek değerdir, gerçek malzemenin veri sayfasıyla teyit edilmeli."
     )
 
-st.page_link("sayfalar/p1_parametre.py", label="Başla: Parametre girişi", icon="📝")
+st.page_link("sayfalar/p1_parametre.py", label="Başla: Veri girişi", icon="📝")

@@ -5,21 +5,34 @@ from physics import film
 
 G = 9.81
 CASE = dict(eta=3.0, U=1e-3, gamma=0.035, rho_p=1250.0)
+COEF = dict(C_lld=0.94, C_fib=1.34, C_grav=0.8)
 
 
 def test_d7a_reference_value():
-    h = film.h_lld(CASE["eta"], CASE["U"], CASE["gamma"], CASE["rho_p"], G)
+    h = film.h_lld(CASE["eta"], CASE["U"], CASE["gamma"], CASE["rho_p"], G, 0.94)
     assert h * 1e3 == pytest.approx(0.31, abs=0.005)
 
 
 def test_d7b_reference_value():
-    h = film.h_fiber(2e-3, CASE["eta"], CASE["U"], CASE["gamma"])
+    h = film.h_fiber(2e-3, CASE["eta"], CASE["U"], CASE["gamma"], 1.34)
     assert h * 1e3 == pytest.approx(0.52, abs=0.005)
 
 
 def test_d7c_formula():
-    h = film.h_gravity(3.0, 0.1, 1250.0, G)
+    h = film.h_gravity(3.0, 0.1, 1250.0, G, 0.8)
     assert h == pytest.approx(0.8 * np.sqrt(0.3 / (1250 * G)))
+
+
+def test_coefficients_are_linear_inputs():
+    a1 = film.h_lld(3.0, 1e-3, 0.035, 1250, G, 1.0)
+    assert film.h_lld(3.0, 1e-3, 0.035, 1250, G, 0.5) == pytest.approx(0.5 * a1)
+
+
+def test_d7a_equals_plate_form():
+    # h = C·ℓ_c·Ca^(2/3) ile aynı ifade (Rev. 2 yazımı)
+    Ca = film.capillary_number(3.0, 1e-3, 0.035)
+    lc = film.capillary_length(0.035, 1250, G)
+    assert film.h_lld(3.0, 1e-3, 0.035, 1250, G, 0.94) == pytest.approx(0.94 * lc * Ca ** (2 / 3))
 
 
 def test_d5_reference_point_and_trend():
@@ -46,27 +59,30 @@ def test_d6_numbers():
     assert film.capillary_length(0.035, 1250, G) == pytest.approx(1.689e-3, rel=1e-3)
 
 
-def test_choice_thick_mandrel_low_speed():
-    c = film.choose_film(10e-3, 3.0, 1e-3, 0.035, 1250, G)
-    assert c.formula == "D7a" and not c.transition
+@pytest.mark.parametrize("model", ["D7a", "D7b", "D7c"])
+def test_film_thickness_uses_selected_formula(model):
+    r = film.film_thickness(model, 2e-3, 3.0, 1e-3, 0.035, 1250, G, **COEF)
+    assert r.formula == model and r.h0 == pytest.approx(r.values[model])
 
 
-def test_choice_thin_mandrel():
-    c = film.choose_film(1e-3, 3.0, 1e-3, 0.035, 1250, G)
-    assert c.formula == "D7b" and not c.transition
+def test_film_thickness_min_branch():
+    r = film.film_thickness("min_ac", 2e-3, 3.0, 1e-3, 0.035, 1250, G, **COEF)
+    assert r.h0 == pytest.approx(min(r.values["D7a"], r.values["D7c"]))
 
 
-def test_choice_high_speed():
-    c = film.choose_film(3e-3, 10.0, 10e-3, 0.035, 1250, G)
-    assert c.Ca >= 1 and c.formula == "D7c"
+def test_film_thickness_requires_choice():
+    with pytest.raises(ValueError):
+        film.film_thickness("", 2e-3, 3.0, 1e-3, 0.035, 1250, G, **COEF)
 
 
-def test_choice_transition_band():
-    c = film.choose_film(2e-3, 3.0, 1e-3, 0.035, 1250, G)   # R/ℓ_c ≈ 1,18
-    assert c.formula == "D7a" and c.transition
-    assert c.h_low <= c.h0 <= c.h_high
-    assert c.sample(0.0) == c.h_low and c.sample(1.0) == c.h_high
-    assert "GEÇİŞ" in c.reason
+def test_md_criteria_info_has_no_verdict():
+    crit = film.md_criteria(1e-3, 0.05, 1.7e-3)
+    assert [k for k, _, _ in crit] == ["D7a", "D7b", "D7c"]
+    assert all(isinstance(v, str) and "=" in v for _, _, v in crit)
+
+
+def test_d8_stop_thickness_coefficient():
+    assert film.stop_thickness(12.0, 1220, G, 0.3) == pytest.approx(0.3 * 12 / (1220 * G))
 
 
 def test_d8_profile_limits():

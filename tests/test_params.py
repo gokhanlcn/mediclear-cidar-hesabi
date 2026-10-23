@@ -2,107 +2,117 @@ import numpy as np
 import pytest
 
 from physics import params
-from physics.params import Settings
+from physics.params import VALUE_COL, Settings
+from physics.symbols import GROUPS, PARAMS
+
+READY = dict(film_model="D7a")
 
 
 def _set(df, key, **cols):
     df = df.copy()
     for c, v in cols.items():
-        df.loc[df.Kod == key, c] = v
+        df.loc[df.Kod == key, VALUE_COL if c == "val" else c] = v
     return df
 
 
+def test_table_columns_have_no_ranges():
+    df = params.empty_table()
+    assert list(df.columns) == params.COLUMNS
+    assert "Min" not in df.columns and "Max" not in df.columns
+
+
+def test_every_parameter_group_is_a_tab():
+    assert {p.group for p in PARAMS.values()} <= set(GROUPS)
+
+
 def test_empty_table_blocks_calculation():
-    v = params.validate(params.empty_table(), Settings())
+    v = params.validate(params.empty_table(), Settings(**READY))
     assert v.errors and not v.can_calculate(draft=True)
 
 
-def test_example_table_is_valid_but_needs_sources():
+def test_film_model_must_be_chosen():
     v = params.validate(params.example_table(), Settings())
-    assert not v.errors
-    assert v.missing_source
-    assert not v.can_calculate(draft=False) and v.can_calculate(draft=True)
+    assert any("Film formülü" in i.message for i in v.errors)
+    assert not params.validate(params.example_table(), Settings(**READY)).errors
 
 
-def test_example_values_have_approx_note():
+def test_example_table_sources():
     df = params.example_table()
+    v = params.validate(df, Settings(**READY))
+    assert v.missing_source and v.can_calculate(draft=True) and not v.can_calculate(draft=False)
+    # kaynağı belli örnekler (model katsayıları) kaynakla gelir, diğerleri YAKLAŞIK
+    assert "C_lld" not in v.missing_source
     assert (df.loc[df.Kod == "rho_p", "Not"] == params.APPROX_NOTE).all()
 
 
-def test_min_nominal_max_order():
-    df = _set(params.example_table(), "rho_p", Min=1300.0, Max=1200.0)
-    v = params.validate(df, Settings())
-    assert any(i.key == "rho_p" and i.level == "hata" for i in v.issues)
+def test_unused_coefficients_not_required():
+    df = _set(params.example_table(), "C_fib", val=np.nan)
+    assert not params.validate(df, Settings(film_model="D7a")).errors
+    assert params.validate(df, Settings(film_model="D7b")).errors
+
+
+def test_wire_inputs_only_with_spiral():
+    df = _set(params.example_table(), "p_wire", val=np.nan)
+    assert not params.validate(df, Settings(spiral=False, **READY)).errors
+    assert params.validate(df, Settings(spiral=True, **READY)).errors
+
+
+def test_pitch_smaller_than_wire_is_error():
+    df = _set(params.example_table(), "p_wire", val=0.1)
+    assert any(i.key == "p_wire" for i in params.validate(df, Settings(**READY)).errors)
 
 
 @pytest.mark.parametrize("key, value", [("rho_p", -5.0), ("eps", 1.5), ("k_m", 0.0)])
 def test_bounds(key, value):
-    df = _set(params.example_table(), key, Min=value, Nominal=value, Max=value)
-    assert any(i.key == key for i in params.validate(df, Settings()).errors)
+    df = _set(params.example_table(), key, val=value)
+    assert any(i.key == key for i in params.validate(df, Settings(**READY)).errors)
 
 
 def test_temperature_relations():
-    df = _set(params.example_table(), "T_b", Min=90.0, Nominal=90.0, Max=90.0)
-    assert any(i.key == "T_b" for i in params.validate(df, Settings()).errors)
-    df = _set(params.example_table(), "T_m0", Min=80.0, Nominal=80.0, Max=80.0)
-    assert any(i.key == "T_m0" for i in params.validate(df, Settings()).errors)
+    df = _set(params.example_table(), "T_b", val=90.0)
+    assert any(i.key == "T_b" for i in params.validate(df, Settings(**READY)).errors)
+    df = _set(params.example_table(), "T_m0", val=80.0)
+    assert any(i.key == "T_m0" for i in params.validate(df, Settings(**READY)).errors)
 
 
 def test_d1_requires_solid_mandrel():
-    df = _set(params.example_table(), "R_i", Min=0.5, Nominal=0.5, Max=0.5)
-    v = params.validate(df, Settings(T_m0_mode="D1"))
+    df = _set(params.example_table(), "R_i", val=0.5)
+    v = params.validate(df, Settings(T_m0_mode="D1", **READY))
     assert any(i.key == "R_i" for i in v.errors)
 
 
 def test_d1_mode_ignores_T_m0_row():
-    df = _set(params.example_table(), "T_m0", Min=np.nan, Nominal=np.nan, Max=np.nan)
-    assert not params.validate(df, Settings(T_m0_mode="D1")).errors
-    assert params.validate(df, Settings()).errors
-
-
-def test_model_keys_exclude_unused_d1_inputs():
-    direct = params.model_keys(Settings())
-    assert "T_0" not in direct and "T_m0" in direct
-    d1 = params.model_keys(Settings(T_m0_mode="D1"))
-    assert "T_0" in d1 and "T_m0" not in d1
-
-
-def test_pm10():
-    df = _set(params.example_table(), "gamma", Min=np.nan, Max=np.nan)
-    new, changed = params.apply_pm10(df)
-    row = new[new.Kod == "gamma"].iloc[0]
-    assert "gamma" in changed and "rho_p" not in changed      # rho_p'nin aralığı zaten var
-    assert not set(changed) & params.NO_PM10
-    assert row.Min == pytest.approx(0.0315) and row.Max == pytest.approx(0.0385)
-    assert params.PM10_NOTE in row.Not
+    df = _set(params.example_table(), "T_m0", val=np.nan)
+    assert not params.validate(df, Settings(T_m0_mode="D1", **READY)).errors
+    assert params.validate(df, Settings(**READY)).errors
 
 
 def test_editor_changes_map_to_group_rows():
     df = params.example_table()
     pos = list(df[df.Grup == "Proses"].Kod).index("U")
-    new = params.apply_editor_changes(df, "Proses", {pos: {"Nominal": 2.0, "Kaynak": "Servo föyü"},
-                                                     0: {"Min": None}})
+    new = params.apply_editor_changes(df, "Proses", {pos: {VALUE_COL: 2.0, "Kaynak": "Servo föyü"},
+                                                     0: {VALUE_COL: None}})
     row = new[new.Kod == "U"].iloc[0]
-    assert row.Nominal == 2.0 and row.Kaynak == "Servo föyü"
-    assert np.isnan(new[new.Grup == "Proses"].iloc[0].Min)
+    assert row[VALUE_COL] == 2.0 and row.Kaynak == "Servo föyü"
+    assert np.isnan(new[new.Grup == "Proses"].iloc[0][VALUE_COL])
     assert new[new.Grup != "Proses"].equals(df[df.Grup != "Proses"])
 
 
 def test_si_conversion():
-    df = params.example_table()
-    nom = params.nominal_si(df)
-    assert nom["T_g"] == pytest.approx(358.15)
-    assert nom["ID"] == pytest.approx(4e-3)
-    assert params.ranges_si(df)["U"] == pytest.approx((0.5e-3, 1e-3, 5e-3))
+    v = params.values_si(params.example_table())
+    assert v["T_g"] == pytest.approx(358.15)
+    assert v["ID"] == pytest.approx(4e-3)
+    assert v["U"] == pytest.approx(1e-3)
+    assert v["C_lld"] == pytest.approx(0.94)
 
 
 def test_excel_round_trip():
     df = _set(params.example_table(), "rho_p", Kaynak="Test TDS s.2")
-    s = Settings(T_m0_mode="D1", spiral=False, draft=True, mandrel_material="Alüminyum")
+    s = Settings(T_m0_mode="D1", spiral=False, draft=True, mandrel_material="Alüminyum", film_model="min_ac")
     back, s2, notes = params.load_file(params.to_excel_bytes(df, s), "x.xlsx")
     assert not notes
     assert back.loc[back.Kod == "rho_p", "Kaynak"].iloc[0] == "Test TDS s.2"
-    np.testing.assert_allclose(back.Nominal.to_numpy(dtype=float), df.Nominal.to_numpy(dtype=float))
+    np.testing.assert_allclose(back[VALUE_COL].to_numpy(dtype=float), df[VALUE_COL].to_numpy(dtype=float))
     assert s2 == s
 
 
@@ -110,7 +120,16 @@ def test_csv_round_trip():
     df = params.example_table()
     back, s2, _ = params.load_file(params.to_csv_bytes(df), "x.csv")
     assert s2 is None
-    np.testing.assert_allclose(back.Max.to_numpy(dtype=float), df.Max.to_numpy(dtype=float))
+    np.testing.assert_allclose(back[VALUE_COL].to_numpy(dtype=float), df[VALUE_COL].to_numpy(dtype=float))
+
+
+def test_old_files_with_nominal_column_load():
+    old = params.example_table().rename(columns={VALUE_COL: "Nominal"})
+    old["Min"], old["Max"] = old["Nominal"], old["Nominal"]
+    data = old[["Kod", "Sembol", "Parametre", "Birim", "Min", "Nominal", "Max", "Kaynak", "Not"]].to_csv(
+        index=False, sep=";", decimal=",").encode("utf-8-sig")
+    back, _, _ = params.load_file(data, "eski.csv")
+    assert back.loc[back.Kod == "rho_p", VALUE_COL].iloc[0] == 1250
 
 
 def test_load_rejects_unknown_file():

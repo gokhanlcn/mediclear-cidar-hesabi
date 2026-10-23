@@ -1,7 +1,7 @@
 """Ters tasarım: T_m0 – t_bekleme düzleminde w haritası ve hedefi tutturan aralıklar. SI.
 
-Haritada her iki daldırma da aynı T_m0 ve t_bekleme ile yapılır (2. daldırma ayrı değerleri
-yok sayılır); T_m0 doğrudan girilmiş kabul edilir.
+Haritada 1. daldırmanın T_m0 ve t_bekleme değerleri taranır; 2. daldırma girdileri (T_m0,2,
+T_s1, t_bekleme,2 …) tablodaki değerlerinde sabit kalır. T_m0 doğrudan girilmiş kabul edilir.
 """
 
 from __future__ import annotations
@@ -29,8 +29,7 @@ def design_map(p: dict, opt: Options, T_m0_values, t_wait_values,
     T_vals = np.asarray(T_m0_values, dtype=float)
     t_vals = np.asarray(t_wait_values, dtype=float)
     W = np.full((T_vals.size, t_vals.size), np.nan)
-    run_opt = replace(opt, T_m0_mode="direct", T_m0_2=None, t_wait_2=None, film_u=None,
-                      keep_details=False)
+    run_opt = replace(opt, T_m0_mode="direct", keep_details=False)
     w_target = w_tol = float("nan")
     total, done = W.size, 0
     for i, T in enumerate(T_vals):

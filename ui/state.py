@@ -40,12 +40,8 @@ def validation() -> Validation:
     return params.validate(df(), settings())
 
 
-def nominal_si() -> dict[str, float]:
-    return params.nominal_si(df())
-
-
-def ranges_si() -> dict[str, tuple[float, float, float]]:
-    return params.ranges_si(df())
+def values_si() -> dict[str, float]:
+    return params.values_si(df())
 
 
 def require_ready() -> Validation:
@@ -54,16 +50,16 @@ def require_ready() -> Validation:
     s = settings()
     if v.errors:
         st.error(f"Parametre tablosunda {len(v.errors)} hata var; hesap yapılamıyor. "
-                 "**1. Parametre girişi** sayfasına dönüp kırmızı (🔴) satırları düzelt.")
+                 "**0. Veri girişi** sayfasına dönüp kırmızı (🔴) satırları düzelt.")
         with st.expander("Hataları göster"):
             for i in v.errors:
                 st.markdown(f"- {i.message}")
-        st.page_link("sayfalar/p1_parametre.py", label="Parametre girişine git", icon="📝")
+        st.page_link("sayfalar/p1_parametre.py", label="Veri girişine git", icon="📝")
         st.stop()
     if v.missing_source and not s.draft:
         st.warning(f"{len(v.missing_source)} parametrenin kaynağı boş. .md'deki kurala göre "
                    "kaynağı olmayan değer hesaba girmez. Kaynak sütununu doldur ya da sol menüden "
                    "**Taslak mod**'u aç.")
-        st.page_link("sayfalar/p1_parametre.py", label="Parametre girişine git", icon="📝")
+        st.page_link("sayfalar/p1_parametre.py", label="Veri girişine git", icon="📝")
         st.stop()
     return v
