@@ -20,6 +20,27 @@ def expected_mass(s: float, rho_p: float, L: float, R: float) -> float:
     return rho_p * math.pi * L * ((R + s) ** 2 - R**2)
 
 
+def groove_mass(rho_p: float, L: float, R1: float, d: float, phi: float) -> float:
+    """2. daldırmada sarımlar arasındaki oluklara dolan plastisolün kütlesi.
+
+    Tel halkası r = R1 … R1 + d; halkanın (1 − φ) kesri plastisoldür:
+    m_oluk = ρ_p·(1 − φ)·π·L·[(R1 + d)² − R1²]
+    """
+    return rho_p * (1.0 - phi) * math.pi * L * ((R1 + d) ** 2 - R1**2)
+
+
+def weighed_cover_thickness(m: float, m_groove: float, rho_p: float, L: float, R2: float) -> float:
+    """2. daldırmanın tartımından tel tepesi üzerindeki örtü kalınlığı (D10'un 2. daldırmaya uygulanışı):
+    s = √(R2² + (m − m_oluk)/(ρ_p·π·L)) − R2.
+    """
+    return math.sqrt(R2**2 + (m - m_groove) / (rho_p * math.pi * L)) - R2
+
+
+def mass_sensitivity(rho_p: float, L: float, R: float, s: float) -> float:
+    """dm/ds = 2·ρ_p·π·L·(R + s): kalınlıktaki küçük bir değişimin kütleye etkisi [kg/m]."""
+    return 2.0 * rho_p * math.pi * L * (R + s)
+
+
 def wall_target(ID: float, OD: float, OD_tol: float) -> tuple[float, float]:
     """D11: hedef w = (OD − ID)/2 ve toleransı ±OD_tol/2."""
     return 0.5 * (OD - ID), 0.5 * OD_tol

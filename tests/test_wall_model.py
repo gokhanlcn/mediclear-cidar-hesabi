@@ -25,6 +25,22 @@ def test_d10_round_trip():
     assert wall.expected_mass(s, rho, L, R) == pytest.approx(m)
 
 
+def test_groove_and_cover_weighing_round_trip():
+    rho, L, R1, d, phi = 1250.0, 0.4, 2.6e-3, 0.3e-3, 0.118
+    mg = wall.groove_mass(rho, L, R1, d, phi)
+    # ince halka için V'' = (1 − φ)d yaklaşımıyla aynı mertebe
+    assert mg == pytest.approx(rho * (1 - phi) * d * 2 * math.pi * (R1 + d / 2) * L)
+    R2, s = R1 + d, 0.3e-3
+    m = mg + wall.expected_mass(s, rho, L, R2)
+    assert wall.weighed_cover_thickness(m, mg, rho, L, R2) == pytest.approx(s)
+
+
+def test_mass_sensitivity_matches_derivative():
+    rho, L, R, s, ds = 1250.0, 0.4, 2e-3, 0.5e-3, 1e-7
+    num_d = (wall.expected_mass(s + ds, rho, L, R) - wall.expected_mass(s - ds, rho, L, R)) / (2 * ds)
+    assert wall.mass_sensitivity(rho, L, R, s) == pytest.approx(num_d, rel=1e-6)
+
+
 def test_d11_example_target():
     w, tol = wall.wall_target(4.0e-3, 6.0e-3, 0.1e-3)
     assert w == pytest.approx(1.0e-3) and tol == pytest.approx(0.05e-3)

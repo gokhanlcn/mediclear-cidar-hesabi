@@ -115,3 +115,13 @@ def test_gel_page_second_dip():
     dip_radio.set_value(dip_radio.options[1]).run()
     assert not at.exception
     assert any("2. daldırma" in i.value for i in at.info)
+
+
+def test_weighing_page_second_dip_expected_mass():
+    at = _ready_app()
+    at.switch_page("sayfalar/p6_tartim.py").run()
+    r = next(r for r in at.radio if r.label == "Tartılan daldırma")
+    r.set_value(r.options[1]).run()
+    assert not at.exception, at.exception
+    titles = " ".join(m.value for m in at.markdown)
+    assert "Oluklara dolan plastisol" in titles and "beklenen toplam kütle" in titles
