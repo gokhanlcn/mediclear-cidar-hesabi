@@ -4,7 +4,7 @@ from physics.units import from_si
 from ui import charts, compute, state
 from ui.common import assumptions, draft_banner, explain, num, show_fig
 
-st.title("4. Toplam ve spiralli cidar (D9, D11)")
+st.title("5. Toplam ve spiralli cidar (D9, D11)")
 st.markdown("Jel katmanı ile sürüklenen filmin toplamı kürde biraz çeker (D9). Spiralli tüpte cidar iki "
             "daldırma ve aradaki yay telinden oluşur (D11). Sonuç şartnamedeki hedefle karşılaştırılır.")
 
@@ -18,7 +18,8 @@ degC = lambda T: from_si(T, "°C")  # noqa: E731
 if s.spiral:
     st.info("**Spiralli tüp: iki daldırma modeli.** 1. daldırma: çıplak mandrel → s_1. Ardından yay teli "
             "sarılır. 2. daldırma: plastisolle temas eden yüzey R + s_1 + d_tel. 2. daldırmanın girdileri "
-            "(T_m0,2, T_s1, T_t, t_bekleme,2) **0. Veri girişi → Tel / 2. daldırma** sekmesindedir. "
+            "(T_m0,2, T_s1, T_t, t_bekleme,2) **0. Veri girişi → Tel / 2. daldırma** sekmesindedir; tel halkasının "
+            "hesabı **4. Tel halkası** sayfasındadır. "
             "w = s_1 + d_tel + s_2.")
 else:
     st.info("Spiral kapalı: tek daldırma hesaplanır, w = s_kür. Spirali 0. Veri girişi → Hesap ayarları'ndan açabilirsin.")
@@ -63,7 +64,7 @@ explain("Çubuk, tüp cidarını içten dışa katmanlarına ayırır: 1. daldı
         "bandın içindeyse tüp uygundur.")
 
 assumptions([
-    "Spiralli tüp iki daldırma olarak modellendi; 2. daldırmada 1. kat + tel bölgesi plastisol "
-    "özellikleriyle tek katman sayıldı (tel halkası modeli bir sonraki revizyonda eklenecek).",
+    "Spiralli tüp iki daldırma olarak modellendi; 2. daldırmada katmanlar: mandrel, iç PVC katmanı ve "
+    "tel halkası (ayrıntı: 4. Tel halkası sayfası).",
     "Kür çekmesi kalınlığa doğrudan (1 − ε) ile uygulandı (D9).",
 ])

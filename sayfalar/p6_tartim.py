@@ -8,7 +8,7 @@ from physics.units import from_si, to_si
 from ui import compute, state
 from ui.common import COLORS, draft_banner, explain, num, show_fig
 
-st.title("5. Tartımla doğrulama (D10)")
+st.title("6. Tartımla doğrulama (D10)")
 st.markdown("Bir deneme daldırmasında mandreli daldırmadan önce ve sonra tartarsan, kütle farkından "
             "ortalama kaplama kalınlığını bulabilirsin. Bu, modeli doğrulayan **tek gerçek veridir**.")
 st.latex(r"s = \sqrt{R^2 + \frac{m}{\rho_p \pi L}} - R")

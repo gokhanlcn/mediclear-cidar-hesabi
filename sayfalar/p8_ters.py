@@ -10,7 +10,7 @@ from physics.units import from_si, to_si
 from ui import charts, compute, state
 from ui.common import assumptions, draft_banner, explain, num, show_fig
 
-st.title("6. Ters tasarım – ayar haritası")
+st.title("7. Ters tasarım – ayar haritası")
 st.markdown("Bu sayfa şu soruyu cevaplar: **Hedef cidarı yakalamak için mandrel sıcaklığı (T_m0) ve "
             "bekleme süresi (t_bekleme) hangi aralıkta olmalı?** Program bir ızgaradaki her ayar için "
             "cidarı hesaplar ve hedefi tutturan bölgeyi haritada gösterir.")

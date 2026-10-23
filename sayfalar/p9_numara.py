@@ -10,7 +10,7 @@ from physics.units import from_si, to_si
 from ui import compute, report, state
 from ui.common import draft_banner
 
-st.title("7. Numara bazında sonuçlar ve rapor")
+st.title("8. Numara bazında sonuçlar ve rapor")
 st.markdown("Her ET numarası (iç çap) için bir satır ekle; program hepsini tek tuşla hesaplar. Sonuçları "
             "Excel'e aktarabilir ve bitirme raporuna eklenebilecek tek dosyalık bir özet rapor alabilirsin.")
 
@@ -136,7 +136,7 @@ include = c2.multiselect("Rapora eklenecek analizler", ["Ters tasarım haritası
                          placeholder="Analiz seç (isteğe bağlı)",
                          help="Yalnızca ilgili sayfada hesaplanmış analizler eklenebilir.")
 if "Ters tasarım haritası" in include and ters is None:
-    st.caption("Ters tasarım haritası henüz hesaplanmadı; 6. sayfada hesaplayınca rapora eklenebilir.")
+    st.caption("Ters tasarım haritası henüz hesaplanmadı; 7. sayfada hesaplayınca rapora eklenebilir.")
 if c2.button("📝 Özet raporu hazırla", width="stretch"):
     with st.spinner("Rapor hazırlanıyor…"):
         html_text = report.build_report(df, s, compute.run(), p, numara=res_df,

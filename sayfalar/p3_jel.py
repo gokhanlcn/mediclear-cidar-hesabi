@@ -28,8 +28,7 @@ sol = g.sol
 
 if dip.index == 2:
     st.info(f"2. daldırma: plastisolle temas eden yüzey R + s_1 + d_tel = {num(mm(dip.R_s), 3)} mm. "
-            "1. kat ve tel bölgesi plastisol özellikleriyle katı katman sayıldı (tel ihmal edildi); "
-            f"bu katman ve mandrel daldırmada {num(degC(dip.T_m0), 1)} °C.")
+            "Katmanlar: mandrel, iç PVC katmanı ve tel halkası (ayrıntı: 4. Tel halkası sayfası).")
 
 # --- D2 -------------------------------------------------------------------------------
 st.header("D2 – Enerji tavanı")

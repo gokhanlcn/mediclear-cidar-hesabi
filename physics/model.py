@@ -2,9 +2,9 @@
 
 Spiralli tüp iki daldırma olarak modellenir:
 * 1. daldırma: çıplak mandrel → s_1 (= s_kür).
-* 2. daldırma: plastisolle temas eden yüzey R + s_1 + d_tel. R ile bu yüzey arasındaki bölge
-  (önceki kat + tel bölgesi) plastisol özellikleriyle katı katman sayılır; tel ihmal edilir.
-  Mandrel T_m0,2, bu katman T_s1 sıcaklığındadır (kullanıcı girdisi).
+* 2. daldırma: katmanlar içten dışa mandrel (T_m0,2), iç PVC katmanı s_1 (T_s1, plastisol
+  özellikleri) ve tel halkası d (çelik tel + oluklara dolan plastisol; ρc_eff, Rayleigh k_eff,
+  enerji dengesinden T_halka – bkz. wire.py). Plastisolle temas eden yüzey R + s_1 + d (tel tepesi).
 * w = s_1 + d_tel + s_2.
 Sürüklenen film, plastisolle temas eden yüzeyin üstündeki jel katmanına (R_s + s_jel) çekilir.
 """
@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from . import film, gel, preheat, wall
+from . import film, gel, preheat, wall, wire
 
 
 class ModelError(ValueError):
@@ -64,6 +64,7 @@ class ModelResult:
     deviation: float
     ok: bool
     warnings: list[str] = field(default_factory=list)
+    wire: wire.WireResult | None = None
 
     def summary(self) -> dict[str, float]:
         """Tablolar için skaler sonuçlar (SI)."""
@@ -113,15 +114,21 @@ def run_model(p: dict, opt: Options | None = None) -> ModelResult:
     dip1 = _dip(1, [mandrel], p, T_m0, p["t_wait"], opt)
 
     dip2 = None
+    wr = None
     d_wire = 0.0
     if opt.spiral:
         d_wire = p["d_wire"]
+        if d_wire > 0 and p["p_wire"] < d_wire:
+            raise ModelError("Hatve p, tel çapı d'den küçük olamaz.")
         T2, t2 = p["T_m0_2"], p["t_wait_2"]
-        R2 = R + dip1.s_kur + d_wire
+        R1 = R + dip1.s_kur
         layers = [gel.Layer(p["R_i"], R, p["rho_m"], p["c_m"], p["k_m"], T2, "mandrel")]
-        if R2 > R:
-            layers.append(gel.Layer(R, R2, p["rho_p"], p["c_p"], p["k_p"], p["T_s1"],
-                                    "1. kat + tel bölgesi"))
+        if R1 > R:
+            layers.append(gel.Layer(R, R1, p["rho_p"], p["c_p"], p["k_p"], p["T_s1"], "iç PVC katmanı"))
+        if d_wire > 0:
+            wr = wire.analyze(p, T_m0)
+            # tel halkası: ρc_eff tek sayı olarak verilir (rho = ρc_eff, c = 1)
+            layers.append(gel.Layer(R1, R1 + d_wire, wr.rhoc_eff, 1.0, wr.k_eff, wr.T_ring, "tel halkası"))
         dip2 = _dip(2, layers, p, T2, t2, opt)
         w = wall.spiral_wall(dip1.s_kur, d_wire, dip2.s_kur)
     else:
@@ -130,7 +137,7 @@ def run_model(p: dict, opt: Options | None = None) -> ModelResult:
     w_target, w_tol = wall.wall_target(p["ID"], p["OD"], p["OD_tol"])
     dev, ok = wall.check_target(w, w_target, w_tol)
     return ModelResult(R=R, T_m0=T_m0, preheat=pre, dip1=dip1, dip2=dip2, w=w, w_target=w_target,
-                       w_tol=w_tol, deviation=dev, ok=ok, warnings=warnings)
+                       w_tol=w_tol, deviation=dev, ok=ok, warnings=warnings, wire=wr)
 
 
 def _dip(index: int, layers: list[gel.Layer], p: dict, T_m0: float, t_wait: float,

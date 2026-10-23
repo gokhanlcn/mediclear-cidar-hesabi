@@ -58,7 +58,7 @@ def _ready_app():
 
 
 CALC_PAGES = ["sayfalar/p2_onisitma.py", "sayfalar/p3_jel.py", "sayfalar/p4_film.py",
-              "sayfalar/p5_toplam.py", "sayfalar/p6_tartim.py"]
+              "sayfalar/p45_tel.py", "sayfalar/p5_toplam.py", "sayfalar/p6_tartim.py"]
 
 
 @pytest.mark.parametrize("page", CALC_PAGES)

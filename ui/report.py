@@ -23,7 +23,9 @@ ASSUMPTIONS = [
     "Film formülü ve tüm model katsayıları (C_LLD, C_fib, C_grav, C_dur) kullanıcı tarafından seçilir/girilir; "
     "değerleri ve kaynakları girdi tablosundadır.",
     "Film, jel yüzeyine (R_s + s_jel) sürüklenir; toplamda L boyunca ortalama film kalınlığı kullanılır.",
-    "Spiralli tüp iki daldırma olarak modellendi; w = s_1 + d_tel + s_2.",
+    "Spiralli tüp iki daldırma olarak modellendi; w = s_1 + d_tel + s_2. 2. daldırmada tel bölgesi, çelik tel "
+    "ve oluklara dolan plastisolden oluşan halka olarak D3'e girer: φ = πd/(4p), (ρc)_eff karışım kuralı, "
+    "k_eff Rayleigh bağıntısı, başlangıç sıcaklığı enerji dengesinden.",
     "D1 (toplu kütle) yalnızca dolu mandrelde, Bi < 0,1 iken geçerli; fırından banyoya transferde soğuma ihmal edildi.",
 ]
 
