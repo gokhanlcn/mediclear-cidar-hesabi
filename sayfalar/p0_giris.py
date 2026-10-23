@@ -6,7 +6,9 @@ st.markdown(
     "Bu program, spiralli PVC endotrakeal tüpün daldırma (dip molding) ile üretiminde oluşacak "
     "**cidar kalınlığını** deney yapmadan, veri sayfası ve literatür değerleriyle tahmin eder. "
     "Sıcak mandrel plastisole daldırılınca mandrelin ısısıyla bir **jel katmanı** oluşur; mandrel "
-    "çekilirken üstüne ince bir **sıvı film** sürüklenir. Toplam kalınlık bu ikisinin toplamıdır."
+    "çekilirken üstüne ince bir **sıvı film** sürüklenir. Toplam kalınlık bu ikisinin toplamıdır. "
+    "Programın içinde gizli katsayı yoktur: hesapta kullanılan her değer **0. Veri girişi** sayfasında "
+    "kaynağıyla girilir ve her sonuç **formül → değerler → sonuç** biçiminde gösterilir."
 )
 
 with st.container(border=True):

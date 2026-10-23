@@ -52,46 +52,56 @@ Paket yöneticisiyle `python3` ve `python3-venv` paketlerini kur (ör. Ubuntu: `
 ### Programı arkadaşına göndermek
 Klasörü zip'lerken **`.venv` klasörünü dahil etme** (çok büyüktür ve başka bilgisayarda çalışmaz).
 Program `.venv` yoksa veya bozuksa kendisi yeniden kurar. Veri setini paylaşmak için
-**1. Parametre girişi → Excel olarak kaydet** dosyasını göndermen yeterli.
+**0. Veri girişi → Excel olarak kaydet** dosyasını göndermen yeterli.
 
 ---
 
 ## 3. Örnek bir hesabın baştan sona yapılışı
 
-Sol menüdeki sayfalar hesap sırasını izler. Her grafiğin altında **"Bu grafik ne gösteriyor?"**
-kutusu vardır.
+Sol menüdeki sayfalar hesap sırasını izler. Her hesap **formül → değerlerin yerine konmuş hali →
+sonuç** biçiminde gösterilir; her grafiğin altında **"Bu grafik ne gösteriyor?"** kutusu vardır.
 
-1. **1. Parametre girişi**
-   - Elinde veri yoksa **📋 Örnek değerlerle doldur**'a bas. Tüm değerler "YAKLAŞIK" işaretlidir.
-   - Gerçek veriyle çalışırken her satırın **Nominal**, **Min**, **Max** ve **Kaynak** sütunlarını doldur.
-     Hücreye çift tıkla, yaz, **Enter**'a bas.
+> **Bilimsel hesaplayıcı ilkesi:** Programın içinde gizli katsayı veya seçilmiş eşik yoktur. Hesapta
+> kullanılan her sayı – malzeme özellikleri, proses ayarları, tel verileri ve formüllerin katsayıları –
+> 0. Veri girişi sayfasında kullanıcı tarafından, kaynağıyla birlikte girilir.
+
+0. **0. Veri girişi**
+   - Elinde veri yoksa **📋 Örnek değerlerle doldur**'a bas. Kaynağı belli olanlar kaynağıyla yazılır,
+     diğerleri "YAKLAŞIK" işaretlenir.
+   - Tablo: Sembol | Parametre | Birim | **Değer** | **Kaynak** | Not. Hücreye çift tıkla, yaz, **Enter**'a bas.
+     Her satırın ne olduğu **Açıklama** sütununda ve sekmenin altındaki listede yazar.
+   - Sekmeler: Plastisol · Mandrel · Proses · Ürün · **Tel / 2. daldırma** (d, hatve p, tel malzemesi,
+     2. daldırmada mandrel / iç katman / tel sıcaklıkları, bekleme süresi) · **Model katsayıları**
+     (C_LLD, C_fib, C_grav, C_dur).
+   - **Film formülü seçimi** (Model katsayıları sekmesi): D7a / D7b / D7c / "D7a ile D7c'nin küçüğü".
+     Program seçim yapmaz; Ca, ℓ_c, R/ℓ_c ve .md'deki koşullar seçimine yardımcı olmak için gösterilir.
    - Satır renkleri: 🟢 tamam · 🟡 kaynak yok · 🔴 hata (mesaj ne yapacağını söyler).
    - Kaynak sütunu boşken hesap yapılmaz (.md kuralı). Denemek için sol menüden **Taslak mod**'u aç.
    - **Hesap ayarları**: T_m0 doğrudan mı girilecek yoksa fırından (D1) mı hesaplanacak, spiral var mı,
-     mandrel malzemesi.
+     mandrel malzemesi, plastisol / organosol.
    - **E_a yardımcısı** (Plastisol sekmesi): TDS'deki viskozite–sıcaklık eğrisinden en az iki nokta gir;
      E_a hesaplanır ve tabloya yazılır.
-   - **Excel olarak kaydet** ile veri setini sakla; sonra **yükle** ile geri getir.
-2. **2. Mandrel ön ısıtma (D1)** – Mandrelin fırında hedef sıcaklığa kaç saniyede ulaştığını ve
-   Biot kontrolünü gösterir.
-3. **3. Jel katmanı (D2–D4)** – Jel kalınlığının zamanla artışı, radyal sıcaklık profili (zaman
-   kaydırıcısıyla) ve sıcaklık haritası.
-4. **4. Sürüklenen film (D5–D8)** – Viskozite, hangi film formülünün geçerli olduğu, çekme hızına göre
-   film kalınlığı ve süzülme.
-5. **5. Toplam cidar (D9, D11)** – Spiralli tüpte w = s₁ + d_tel + s₂; hedefle karşılaştırma
+   - **Excel olarak kaydet** ile veri setini sakla; sonra **yükle** ile geri getir (eski dosyalar da yüklenir;
+     film formülünü yeniden seçmen gerekir).
+1. **1. Mandrel ön ısıtma (D1)** – τ, Biot sayısı, t_ön sonundaki sıcaklık ve hedefe ulaşma süresi.
+2. **2. Jel katmanı (D2–D4)** – Enerji tavanı, ısı iletimi çözümü (yöntem ve ağ bilgisiyle), jel
+   kalınlığının zamanla artışı, radyal sıcaklık profili ve sıcaklık haritası. 1. / 2. daldırma seçilebilir.
+3. **3. Sürüklenen film (D5–D8)** – Banyo sıcaklığındaki viskozite, Ca ve ℓ_c, seçilen film formülü,
+   akma gerilmesi ve mandrel boyunca süzülme.
+4. **4. Tel halkası (2. daldırma)** – Tel hacim oranı φ = πd/(4p), halkanın ısı kapasitesi ve iletkenliği
+   (Rayleigh), oluklara dolan plastisolle başlangıç sıcaklığı, temas sıcaklıkları ve tel çevresi jel halkası.
+5. **5. Toplam cidar (D9, D11)** – Kür sonrası kalınlıklar, w = s₁ + d_tel + s₂ ve hedefle karşılaştırma
    (**✅ Uygun / ❌ Uygun değil**).
-6. **6. Tartım doğrulama (D10)** – Deneme numunesinin kütle farkını gir; ölçülen ortalama kalınlık
-   modelle karşılaştırılır.
-7. **7. Belirsizlik – Monte Carlo (D12)** – **Monte Carlo'yu çalıştır**'a bas. P5–P95 aralığı, hedefi
-   tutturma olasılığı ve sonucu en çok etkileyen parametreler (tornado grafiği).
-8. **8. Ters tasarım** – **Haritayı hesapla**'ya bas. Hedef cidarı veren mandrel sıcaklığı ve bekleme
-   süresi bölgesi kırmızı bantla gösterilir; altındaki tablo fırın ve çevrim süresi tasarımı içindir.
-9. **9. Numara bazında sonuçlar ve rapor**
+6. **6. Tartımla doğrulama (D10)** – Modelin deneysel doğrulama yöntemi. Deney verisi yokken beklenen
+   kaplama kütlesini (2. daldırmada oluk + örtü) ve terazi hassasiyetini verir; ölçüm girilirse tartımdan
+   bulunan kalınlığı modelle karşılaştırır.
+7. **7. Ters tasarım** – **Haritayı hesapla**'ya bas. Hedef cidarı veren 1. daldırma mandrel sıcaklığı ve
+   bekleme süresi bölgesi kırmızı bantla gösterilir; altındaki tablo fırın ve çevrim süresi tasarımı içindir.
+8. **8. Numara bazında sonuçlar ve rapor**
    - Her ET numarası için bir satır ekle, **Tümünü hesapla**'ya bas.
    - **Excel** ile tüm girdi, kaynak ve sonuçları indir.
    - **Özet raporu hazırla → indir**. HTML dosyasını çift tıklayıp aç; PDF için tarayıcıda
      **Yazdır → PDF olarak kaydet** (internet gerekmez).
-
 **Grafikleri PNG olarak kaydetmek:** fareyi grafiğin üstüne getir, sağ üstte çıkan **📷 kamera**
 simgesine tıkla.
 
@@ -105,11 +115,12 @@ simgesine tıkla.
 | İlk kurulumda "Paketler kurulamadı" | İnternet bağlantını kontrol et. Okul/şirket ağında güvenlik duvarı engelliyor olabilir; başka ağda dene. Sonra klasördeki `.venv` klasörünü silip tekrar çalıştır. |
 | Tarayıcı açılmadı | Tarayıcıya elle **http://localhost:8501** yaz. |
 | "Program zaten açık" yazıp kapanıyor | Program başka bir pencerede çalışıyor; tarayıcıdaki sekmeyi kullan ya da diğer siyah pencereyi kapatıp tekrar aç. |
-| Sayfada "Parametre tablosunda … hata var" | **1. Parametre girişi**'ne dön; 🔴 satırları ve en alttaki "Kontrol sonucu" mesajlarını düzelt. |
+| Sayfada "Parametre tablosunda … hata var" | **0. Veri girişi**'ne dön; 🔴 satırları ve en alttaki "Kontrol sonucu" mesajlarını düzelt. |
 | Sayfada "… parametrenin kaynağı boş" | Kaynak sütununu doldur ya da sol menüden **Taslak mod**'u aç. |
 | "T_g, T_b'den büyük olmalı" | Jel sıcaklığı banyo sıcaklığından yüksek olmalı; TDS'deki jel sıcaklığını kontrol et. |
 | "T_m0, T_g'den büyük olmalı" | Mandrel jel sıcaklığının altındaysa jel oluşmaz; fırın sıcaklığını veya ön ısıtma süresini artır. |
-| Monte Carlo / harita yavaş | Deneme sayısını (N) veya ızgara çözünürlüğünü düşür; hızlı modu kullan. |
+| "Film formülü seçilmemiş" | 0. Veri girişi → Model katsayıları sekmesinde kullanılacak film formülünü seç. |
+| Ters tasarım haritası yavaş | Izgara çözünürlüğünü düşür. |
 | Sonuçlar "eski" uyarısı | Girdiler değişti; ilgili sayfada düğmeye tekrar bas. |
 | Program pencereyi kapatınca durdu | Normaldir; siyah pencere programın kendisidir. Tekrar `baslat.bat`. |
 | Yaptığım değişiklikler kayboldu | Tarayıcı sayfasını yenilemek (F5) verileri sıfırlar. Çalışmayı **Excel olarak kaydet** ile sakla. |
