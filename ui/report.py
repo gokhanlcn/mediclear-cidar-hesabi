@@ -27,6 +27,8 @@ ASSUMPTIONS = [
     "ve oluklara dolan plastisolden oluşan halka olarak D3'e girer: φ = πd/(4p), (ρc)_eff karışım kuralı, "
     "k_eff Rayleigh bağıntısı, başlangıç sıcaklığı enerji dengesinden.",
     "D1 (toplu kütle) yalnızca dolu mandrelde, Bi < 0,1 iken geçerli; fırından banyoya transferde soğuma ihmal edildi.",
+    "Tel halkası: tel ile matris arasında tam ısıl temas; oluklar daldırma anında T_b sıcaklığındaki plastisolle dolar; "
+    "iç PVC katmanı plastisol ısıl özellikleriyle hesaplanır.",
 ]
 
 CSS = """
@@ -89,8 +91,12 @@ def build_report(df: pd.DataFrame, s: Settings, res: ModelResult, p: dict,
     v = params.validate(df, s)
     now = _dt.datetime.now().strftime("%d.%m.%Y %H:%M")
     parts = [f"<h1>MediClear – Daldırma Cidar Kalınlığı Hesabı: Özet Rapor</h1>"
-             f"<div class='meta'>Oluşturma: {now} · Denklemler: cidar_kalinligi_hesabi.md (D1–D12)</div>",
-             f"<div class='note'>{html.escape(DISCLAIMER)}</div>"]
+             f"<div class='meta'>Oluşturma: {now} · Denklemler: cidar_kalinligi_hesabi.md (D1–D11) ve tel halkası "
+             "modeli (İstasyon Bazında Minimum Süre Hesabı Rev. 2, Bölüm 2.5)</div>",
+             f"<div class='note'>{html.escape(DISCLAIMER)}</div>",
+             "<div class='warn'><b>Doğrulama durumu:</b> Sonuçlar teorik denklemler ve veri sayfası değerleriyle "
+             "hesaplanmıştır; model henüz deneyle doğrulanmamıştır. Doğrulama yöntemi: deneme daldırmasında "
+             "daldırma öncesi–sonrası tartım ile ortalama kalınlığın bulunup modelle karşılaştırılması (D10).</div>"]
     if v.missing_source:
         syms = ", ".join(PARAMS[k].sym for k in v.missing_source)
         parts.append(f"<div class='warn'><b>Taslak:</b> kaynağı belirtilmemiş değerler kullanıldı ({html.escape(syms)}). "
@@ -116,6 +122,23 @@ def build_report(df: pd.DataFrame, s: Settings, res: ModelResult, p: dict,
              "h_0 [mm]": mm(d.h0), "h ort. (D8) [mm]": mm(d.h), "s_kür (D9) [mm]": mm(d.s_kur)} for d in dips]
     dd = pd.DataFrame(rows).round(4)
     parts.append(_table(dd, num_cols=set(dd.columns) - {"Daldırma", "D7 formülü"}))
+
+    wr = res.wire
+    if wr is not None:
+        T = lambda x: from_si(x, "°C")  # noqa: E731
+        wt = pd.DataFrame([
+            {"Büyüklük": "Tel hacim oranı φ = πd/(4p)", "Değer": wr.phi, "Birim": "–"},
+            {"Büyüklük": "Halkanın ısı kapasitesi (ρc)_eff (karışım kuralı)", "Değer": wr.rhoc_eff, "Birim": "J/(m³·K)"},
+            {"Büyüklük": "Halkanın radyal iletkenliği k_eff (Rayleigh)", "Değer": wr.k_eff, "Birim": "W/(m·K)"},
+            {"Büyüklük": "Halkanın başlangıç sıcaklığı T_halka (enerji dengesi)", "Değer": T(wr.T_ring), "Birim": "°C"},
+            {"Büyüklük": "Oluk plastisolü V'' = (1 − φ)d", "Değer": wr.V_groove * 1e3, "Birim": "mm³/mm²"},
+            {"Büyüklük": "Temas sıcaklığı: mandrel – plastisol (1. daldırma)", "Değer": T(wr.T_c_dip1), "Birim": "°C"},
+            {"Büyüklük": "Temas sıcaklığı: iç PVC – plastisol (2. daldırma)", "Değer": T(wr.T_c_layer), "Birim": "°C"},
+            {"Büyüklük": "Temas sıcaklığı: tel – plastisol (2. daldırma)", "Değer": T(wr.T_c_wire), "Birim": "°C"},
+            {"Büyüklük": "Tel çevresinde en kalın jel halkası δ_tel", "Değer": mm(wr.delta_wire), "Birim": "mm"},
+        ])
+        parts.append("<h3 style='font-size:12px;margin:10px 0 4px'>Tel halkası (2. daldırma)</h3>")
+        parts.append(_table(wt, num_cols={"Değer"}))
 
     if numara is not None and not numara.empty:
         parts.append("<h2>2. Numara bazında hedefler ve sonuçlar</h2>")

@@ -54,8 +54,9 @@ opt = compute.options(quality="hızlı")
 T_vals = to_si(np.linspace(*T_rng, n), "°C")
 t_vals = np.linspace(*t_rng, n)
 sig = (tuple(sorted(pp.items())), astuple(opt), tuple(T_vals), tuple(t_vals))
-st.caption(f"{n}×{n} = {n * n} nokta hesaplanacak (hızlı ağ). "
-           + ("Spiralli tüpte her iki daldırma aynı T_m0 ve t_bekleme ile yapılır." if s.spiral else ""))
+st.caption(f"{n}×{n} = {n * n} nokta hesaplanacak (hızlı ağ). Haritada yalnızca 1. daldırmanın T_m0 ve "
+           "t_bekleme değerleri değişir; diğer tüm girdiler 0. Veri girişindeki değerlerindedir"
+           + (" (2. daldırma: T_m0,2, T_s1, T_t, t_bekleme,2 ve tel verileri dahil)." if s.spiral else "."))
 
 stored = st.session_state.get("ters")
 if st.button("🗺️ Haritayı hesapla", type="primary"):
@@ -87,7 +88,7 @@ show_fig(charts.design_map(dm, title, nominal=(p["t_wait"], compute.run().T_m0))
          f"ters_tasarim_ID{mm(pp['ID']):g}", height=520)
 explain(f"Renkler ve eş-kalınlık çizgileri, her (bekleme süresi, mandrel sıcaklığı) çifti için hesaplanan "
         f"cidar kalınlığını gösterir. Kırmızı taralı bant hedef aralıktır ({num(lo, 3)}–{num(hi, 3)} mm): "
-        "bu bandın içindeki her ayar hedef cidarı verir. Beyaz çarpı parametre tablosundaki mevcut ayardır.")
+        "bu bandın içindeki her ayar hedef cidarı verir. Beyaz çarpı 0. Veri girişindeki mevcut ayardır.")
 
 # --- Yorum ve tablo -------------------------------------------------------------------
 table = inverse.feasible_table(dm)
@@ -96,8 +97,8 @@ if ok_rows.empty:
     w_min, w_max = np.nanmin(W), np.nanmax(W)
     if w_min > hi:
         st.error(f"Bu aralıkta en ince sonuç bile ({num(w_min, 3)} mm) hedeften kalın. Çekme hızını "
-                 "düşür, T_m0 aralığını aşağı genişlet, daha ince tel kullan ya da (spiralde) 2. daldırma "
-                 "ayarlarını ayrı düşün.")
+                 "düşür, T_m0 aralığını aşağı genişlet ya da (spiralde) 0. Veri girişindeki tel ve 2. daldırma "
+                 "değerlerini gözden geçir.")
     elif w_max < lo:
         st.error(f"Bu aralıkta en kalın sonuç bile ({num(w_max, 3)} mm) hedeften ince. Çekme hızını "
                  "artır, T_m0 veya t_bekleme aralığını yukarı genişlet.")
@@ -145,6 +146,8 @@ st.download_button("💾 Ayar tablosunu CSV olarak indir",
 
 assumptions([
     "Harita hızlı (kaba) ağla hesaplanır; seçilen noktayı diğer sayfalarda normal ağla doğrulayın.",
-    "T_m0 doğrudan verilmiş kabul edilir; diğer tüm parametreler nominal değerlerinde sabittir.",
-] + (["Spiralli tüpte her iki daldırma aynı T_m0 ve t_bekleme ile yapılır (2. daldırma için ayrı "
-      "girilen değerler bu haritada kullanılmaz)."] if s.spiral else []))
+    "Haritada 1. daldırmanın T_m0 değeri doğrudan verilmiş kabul edilir (D1 modu kullanılmaz); ID, OD, "
+    "tolerans ve U bu sayfadaki değerlerdir, diğer tüm girdiler 0. Veri girişindeki değerlerinde sabittir.",
+] + (["Spiralli tüpte 2. daldırmanın girdileri (T_m0,2, T_s1, T_t, t_bekleme,2) haritada değişmez; 2. "
+      "daldırmanın etkisini görmek için bu değerleri 0. Veri girişinde değiştirip haritayı yeniden hesapla."]
+     if s.spiral else []))

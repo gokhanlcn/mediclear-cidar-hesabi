@@ -92,12 +92,14 @@ def test_report_page_full_flow():
     next(b for b in at.button if "Tümünü" in b.label).click().run()
     assert not at.exception, at.exception
     res = at.session_state["numara_res"]
-    assert len(res) == 1 and "s_toplam [mm]" in res.columns
+    assert len(res) == 1 and {"s_1 [mm]", "s_2 [mm]", "w [mm]", "OD hesap [mm]"} <= set(res.columns)
     next(b for b in at.button if "raporu hazırla" in b.label).click().run()
     assert not at.exception, at.exception
     html_text = at.session_state["report_html"]
     assert html_text.startswith("<!doctype html>") and "Ana grafikler" in html_text
     assert html_text.count('class="fig"') == 3      # jel, cidar, harita
+    assert "Doğrulama durumu" in html_text and "Tel halkası (2. daldırma)" in html_text
+    assert "D1–D12" not in html_text
 
 
 @pytest.mark.parametrize("page", CALC_PAGES)
