@@ -7,14 +7,13 @@ import streamlit as st
 from physics import preheat
 from physics.units import from_si
 from ui import state
+from ui.calc import L, step
 from ui.common import COLORS, assumptions, draft_banner, explain, num, show_fig
 
 st.title("1. Mandrel ön ısıtma (D1)")
 st.markdown("Mandrelin fırında ne kadar sürede istenen sıcaklığa geldiğini **toplu kütle modeli** "
             "ile hesaplar. Model, mandrelin içinde sıcaklığın her yerde aynı olduğunu varsayar; "
             "bu varsayım Biot sayısı 0,1'den küçükse geçerlidir.")
-st.latex(r"T_m(t) = T_{\text{fırın}} - (T_{\text{fırın}} - T_0)\, e^{-t/\tau}, \qquad "
-         r"\tau = \frac{\rho_m c_m R}{2 h_{\text{fırın}}}, \qquad Bi = \frac{h_{\text{fırın}} R}{2 k_m} < 0{,}1")
 
 v = state.require_ready()
 s = state.settings()
@@ -35,16 +34,26 @@ tau, Bi = res["tau"], res["Bi"]
 target = res["T_m_end"] if s.T_m0_mode == "D1" else p["T_m0"]
 t_reach = preheat.time_to_reach(target, p["T_oven"], p["T_0"], tau)
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Zaman sabiti τ", f"{num(tau, 1)} s", help="Mandrelin sıcaklık farkının %63'ünü kapattığı süre.")
-c2.metric("Biot sayısı Bi", num(Bi, 4), help="0,1'den küçükse mandrel içinde sıcaklık eşit kabul edilebilir.")
-c3.metric(f"t_ön = {num(p['t_pre'], 0)} s sonunda T_m", f"{num(C(res['T_m_end']), 1)} °C")
-if s.T_m0_mode == "D1":
-    c4.metric("Daldırma sıcaklığı T_m0", f"{num(C(target), 1)} °C", help="D1 modunda T_m0 = T_m(t_ön).")
-else:
-    c4.metric(f"Hedef T_m0 = {num(C(target), 0)} °C'ye ulaşma süresi",
-              "ulaşılamaz" if math.isinf(t_reach) else f"{num(t_reach, 0)} s")
-
+Tf, T0 = C(p["T_oven"]), C(p["T_0"])
+st.caption("Değerler SI birimleriyle yerine konur (R metre); sıcaklık farklarında °C ve K aynıdır.")
+step("Zaman sabiti τ (dolu silindir, karakteristik boy V/A = R/2)",
+     r"\tau = \frac{\rho_m\, c_m\, R}{2\, h_{\text{fırın}}}",
+     rf"\frac{{{L(p['rho_m'])} \cdot {L(p['c_m'])} \cdot {L(R)}}}{{2 \cdot {L(p['h_oven'])}}}",
+     rf"{L(tau)}\;\text{{s}}", "Mandrelin fırın sıcaklığına olan farkının %63'ünü kapattığı süre.")
+step("Biot sayısı",
+     r"Bi = \frac{h_{\text{fırın}}\, R}{2\, k_m}",
+     rf"\frac{{{L(p['h_oven'])} \cdot {L(R)}}}{{2 \cdot {L(p['k_m'])}}}", L(Bi),
+     "Toplu kütle modeli (mandrel içinde tek sıcaklık) Bi < 0,1 iken geçerlidir.")
+step(f"t_ön = {num(p['t_pre'], 0)} s sonunda mandrel sıcaklığı",
+     r"T_m(t) = T_{\text{fırın}} - (T_{\text{fırın}} - T_0)\, e^{-t/\tau}",
+     rf"{L(Tf)} - ({L(Tf)} - {L(T0)}) \cdot e^{{-{L(p['t_pre'])}/{L(tau)}}}",
+     rf"{L(C(res['T_m_end']))}\;°\text{{C}}",
+     "D1 modunda bu değer 1. daldırmanın T_m0'ıdır." if s.T_m0_mode == "D1" else None)
+if math.isfinite(t_reach):
+    step(f"T_m0 = {num(C(target), 1)} °C'ye ulaşma süresi",
+         r"t = \tau\, \ln\frac{T_{\text{fırın}} - T_0}{T_{\text{fırın}} - T_{m0}}",
+         rf"{L(tau)} \cdot \ln\frac{{{L(Tf)} - {L(T0)}}}{{{L(Tf)} - {L(C(target))}}}",
+         rf"{L(t_reach)}\;\text{{s}}")
 if Bi >= preheat.BIOT_LIMIT:
     st.error(f"⚠️ Bi = {num(Bi, 3)} ≥ 0,1: **toplu kütle modeli geçersiz.** Mandrelin içi ile yüzeyi "
              "arasında belirgin sıcaklık farkı olur; süre bu sayfadakinden uzun çıkabilir. "

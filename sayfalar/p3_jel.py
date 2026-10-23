@@ -5,6 +5,7 @@ import streamlit as st
 
 from physics.units import from_si
 from ui import charts, compute, state
+from ui.calc import L, step
 from ui.dips import select_dip
 from ui.common import COLORS, assumptions, draft_banner, explain, num, show_fig
 
@@ -32,35 +33,64 @@ if dip.index == 2:
 
 # --- D2 -------------------------------------------------------------------------------
 st.header("D2 – Enerji tavanı")
-st.latex(r"X = \frac{\rho_m c_m (R^2 - R_i^2)(T_{m0} - T_g)}{\rho_p c_p R^2 (T_g - T_b)}, \qquad "
-         r"s_{max} = R\left(\sqrt{1 + X} - 1\right), \qquad "
-         r"s_{max} \approx \frac{\rho_m c_m R (T_{m0} - T_g)}{2 \rho_p c_p (T_g - T_b)}")
-c1, c2 = st.columns(2)
-c1.metric("s_max – tam ifade", f"{num(mm(dip.s_max), 3)} mm",
-          help="Mandrelin depoladığı ısının tamamı plastisolü jel sıcaklığına çıkarmaya gitseydi "
-               "oluşacak en büyük kalınlık.")
-if dip.s_max_thin is not None:
-    c2.metric("s_max – ince katman yaklaşımı", f"{num(mm(dip.s_max_thin), 3)} mm",
-              delta=f"{num(100 * (dip.s_max_thin / dip.s_max - 1), 0)} % fark" if dip.s_max > 0 else None,
-              delta_color="off",
-              help="s ≪ R ise tam ifadeye yaklaşır. Fark büyükse katman ince değildir; tam ifade kullanılmalı.")
+st.caption("Mandrelin (ve 2. daldırmada iç katmanların) T_g üzerinde depoladığı ısının tamamı plastisolü "
+           "T_g'ye çıkarmaya gitseydi oluşacak en büyük jel kalınlığı. Değerler SI birimleriyle (m).")
+Tg, Tb = degC(p["T_g"]), degC(p["T_b"])
+rpcp = p["rho_p"] * p["c_p"]
+if dip.index == 1:
+    R, Ri, Tm = dip.R_s, p["R_i"], degC(dip.T_m0)
+    X = p["rho_m"] * p["c_m"] * (R**2 - Ri**2) * max(Tm - Tg, 0) / (rpcp * R**2 * (Tg - Tb))
+    step("Boyutsuz ısı oranı X",
+         r"X = \frac{\rho_m c_m\,(R^2 - R_i^2)\,(T_{m0} - T_g)}{\rho_p c_p\, R^2\,(T_g - T_b)}",
+         rf"\frac{{{L(p['rho_m'])} \cdot {L(p['c_m'])} \cdot ({L(R)}^2 - {L(Ri)}^2) \cdot ({L(Tm)} - {L(Tg)})}}"
+         rf"{{{L(p['rho_p'])} \cdot {L(p['c_p'])} \cdot {L(R)}^2 \cdot ({L(Tg)} - {L(Tb)})}}", L(X))
 else:
-    c2.info("İnce katman yaklaşımı yalnızca dolu mandrelin 1. daldırması için tanımlı. "
-            + ("2. daldırmada D2 bileşik bölgeye (mandrel + 1. kat) uygulandı." if dip.index == 2 else ""))
+    R = dip.R_s
+    terms = [(Ly, Ly.rho * Ly.c * (Ly.r_out**2 - Ly.r_in**2) * max(degC(Ly.T_init) - Tg, 0)) for Ly in g.layers]
+    X = sum(t for _, t in terms) / (rpcp * R**2 * (Tg - Tb))
+    with st.container(border=True):
+        st.markdown("**Katmanların T_g üzerinde depoladığı ısı (birim boydaki ısının π'ye bölümü, J/m)**")
+        st.latex(r"Q_i = (\rho c)_i\,\left(r_{\text{dış},i}^2 - r_{\text{iç},i}^2\right)\,\max(T_i - T_g,\,0)")
+        st.latex(r"\begin{aligned}" + r" \\ ".join(
+            rf"Q_{{\text{{{Ly.name}}}}} &= {L(Ly.rho * Ly.c)} \cdot ({L(Ly.r_out)}^2 - {L(Ly.r_in)}^2) \cdot "
+            rf"\max({L(degC(Ly.T_init))} - {L(Tg)},\,0) = \mathbf{{{L(t)}}}" for Ly, t in terms) + r"\end{aligned}")
+    step("Boyutsuz ısı oranı X (bileşik bölge)",
+         r"X = \frac{\sum_i Q_i}{\rho_p c_p\, R_2^2\,(T_g - T_b)}",
+         rf"\frac{{{L(sum(t for _, t in terms))}}}{{{L(rpcp)} \cdot {L(R)}^2 \cdot ({L(Tg)} - {L(Tb)})}}", L(X),
+         "R_2: plastisolle temas eden yüzeyin (tel tepesi) yarıçapı.")
+step("Enerji tavanı (tam ifade)",
+     r"s_{max} = R\left(\sqrt{1 + X} - 1\right)",
+     rf"{L(R)} \cdot \left(\sqrt{{1 + {L(X)}}} - 1\right)\;\text{{m}}", rf"{L(mm(dip.s_max))}\;\text{{mm}}")
+if dip.s_max_thin is not None:
+    step("Enerji tavanı (ince katman yaklaşımı, s ≪ R)",
+         r"s_{max} \approx \frac{\rho_m c_m\, R\,(T_{m0} - T_g)}{2\,\rho_p c_p\,(T_g - T_b)}",
+         rf"\frac{{{L(p['rho_m'])} \cdot {L(p['c_m'])} \cdot {L(R)} \cdot ({L(Tm)} - {L(Tg)})}}"
+         rf"{{2 \cdot {L(p['rho_p'])} \cdot {L(p['c_p'])} \cdot ({L(Tg)} - {L(Tb)})}}\;\text{{m}}",
+         rf"{L(mm(dip.s_max_thin))}\;\text{{mm}}",
+         f"Tam ifadeden farkı %{num(100 * (dip.s_max_thin / dip.s_max - 1), 0)}. Fark büyükse katman ince "
+         "değildir ve tam ifade kullanılmalıdır." if dip.s_max > 0 else None)
 
 # --- D3 -------------------------------------------------------------------------------
-st.header("D3 – Isı iletimi modeli")
-st.latex(r"\rho c \frac{\partial T}{\partial t} = \frac{1}{r}\frac{\partial}{\partial r}"
-         r"\left(k r \frac{\partial T}{\partial r}\right), \qquad "
-         r"s_{jel}(t) = \max\{ r : T(r,t) \ge T_g \} - R")
-c1, c2, c3 = st.columns(3)
-c1.metric(f"s_jel (t_bekleme = {num(dip.t_wait, 0)} s)", f"{num(mm(dip.s_jel), 3)} mm")
-c2.metric("s_jel / s_max", f"{num(100 * dip.s_jel / dip.s_max, 0)} %" if dip.s_max > 0 else "–",
-          help="Mandrel ısısının ne kadarının jelleşmeye gittiğinin kabaca ölçüsü. %100'ü geçemez.")
-c3.metric("Enerji dengesi hatası", f"{sol.energy_error:.1e}",
-          help="Sayısal çözümün enerjiyi ne kadar koruduğu (dış sınırdan çıkan ısı dahil). "
-               "Küçük olması çözümün güvenilir olduğunu gösterir.")
-
+st.header("D3 – Isı iletimi modeli (sayısal çözüm)")
+n_cells = len(sol.rc)
+bath = sol.region == sol.region.max()
+with st.container(border=True):
+    st.markdown("**Denklem ve jel tanımı**")
+    st.latex(r"\rho c \frac{\partial T}{\partial t} = \frac{1}{r}\frac{\partial}{\partial r}"
+             r"\left(k\, r\, \frac{\partial T}{\partial r}\right)")
+    st.latex(r"s_{jel}(t) = \max\{ r : \max_{t' \le t} T(r,t') \ge T_g \} - R")
+    st.markdown(
+        "**Yöntem:** silindirik koordinatta sonlu hacim; zamanda Crank–Nicolson (ilk 4 adım tam örtük). "
+        "Katman arayüzlerinde harmonik ortalama iletkenlik, r = 0'da simetri, dış sınırda T = T_b.\n\n"
+        f"- Katmanlar: {', '.join(Ly.name for Ly in g.layers)}, plastisol banyosu\n"
+        f"- Hücre sayısı: {n_cells} (banyoda {int(bath.sum())}, Δr = {num(mm(np.diff(sol.faces)[bath][0]) * 1000, 1)} µm)\n"
+        f"- Dış sınır: r = {num(mm(sol.faces[-1]), 2)} mm (yüzeyden {num(mm(sol.faces[-1] - dip.R_s), 2)} mm; "
+        f"en az 5·√(α_p·t) ve 3 mm)\n"
+        f"- Zaman adımı sayısı: {len(sol.t) - 1}, toplam süre t_bekleme = {num(dip.t_wait, 1)} s\n"
+        f"- Enerji dengesi hatası: {sol.energy_error:.1e} (dış sınırdan çıkan ısı dahil)")
+    st.latex(rf"s_{{jel}}(t_{{bekleme}} = {L(dip.t_wait)}\,\text{{s}}) = \mathbf{{{L(mm(dip.s_jel))}\;\text{{mm}}}}")
+    if dip.s_max > 0:
+        st.caption(f"s_jel / s_max = %{num(100 * dip.s_jel / dip.s_max, 0)} (enerji tavanını aşamaz).")
 t_ms = g.t
 alpha_p = g.alpha_p
 show_fig(charts.gel_growth(dip), f"D3_s_jel_daldirma{dip.index}")
@@ -79,10 +109,10 @@ r_mm = mm(sol.rc)
 r_max_plot = mm(dip.R_s + max(3 * dip.s_max, 4 * np.sqrt(alpha_p * t_ms[-1]), 1e-3))
 fig = go.Figure()
 x0 = mm(sol.faces[0])
-for i, L in enumerate(g.layers):
+for i, Ly in enumerate(g.layers):
     color = COLORS["mandrel"] if i == 0 else COLORS["plastisol"]
-    fig.add_vrect(x0=mm(L.r_in), x1=mm(L.r_out), fillcolor=color, opacity=0.25 if i == 0 else 0.35,
-                  line_width=0, annotation_text=L.name or "katı", annotation_position="top left")
+    fig.add_vrect(x0=mm(Ly.r_in), x1=mm(Ly.r_out), fillcolor=color, opacity=0.25 if i == 0 else 0.35,
+                  line_width=0, annotation_text=Ly.name or "katı", annotation_position="top left")
 fig.add_vrect(x0=mm(dip.R_s), x1=r_max_plot, fillcolor=COLORS["plastisol"], opacity=0.10, line_width=0,
               annotation_text="plastisol banyosu", annotation_position="top right")
 fig.add_scatter(x=r_mm, y=degC(sol.T[n]), name=f"T(r), t = {num(t_ms[n], 2)} s",
@@ -128,15 +158,19 @@ explain("Her noktanın rengi o anda o yarıçaptaki sıcaklıktır (açık renk 
 
 # --- D4 -------------------------------------------------------------------------------
 st.header("D4 – Difüzyon yaklaşımı (kontrol)")
-st.latex(r"s_{jel}(t) \approx C \sqrt{\alpha_p \, t_{bekleme}}, \qquad \alpha_p = \frac{k_p}{\rho_p c_p}")
-c1, c2, c3 = st.columns(3)
-c1.metric("C (D3'e uydurulan)", num(dip.C, 3))
-c2.metric("α_p", f"{alpha_p:.2e} m²/s".replace(".", ","))
-c3.metric("D4 tahmini", f"{num(mm(dip.C * np.sqrt(alpha_p * dip.t_wait)), 3)} mm",
-          help="C·√(α_p·t_bekleme). D3 sonucuyla aynı mertebede olmalı.")
-st.caption("C, D3'ün s_jel(t) eğrisine en küçük kareler yöntemiyle uydurulmuştur. C'nin 1 civarında "
-           "olması, jel cephesinin ısının plastisolde yayılma mesafesi kadar ilerlediğini gösterir.")
-
+step("Plastisolün ısıl yayınımı",
+     r"\alpha_p = \frac{k_p}{\rho_p\, c_p}",
+     rf"\frac{{{L(p['k_p'])}}}{{{L(p['rho_p'])} \cdot {L(p['c_p'])}}}", rf"{L(alpha_p)}\;\text{{m}}^2/\text{{s}}")
+step("C katsayısı (D3'ün s_jel(t) eğrisine en küçük kareler uydurması)",
+     r"C = \frac{\sum_k s_{jel}(t_k)\,\sqrt{\alpha_p t_k}}{\sum_k \alpha_p\, t_k}",
+     None, L(dip.C, 3),
+     "C, D3 sonucundan hesaplanır; girdi değildir. 1 civarında olması jel cephesinin ısının yayılma mesafesi "
+     "kadar ilerlediğini gösterir.")
+step("D4 tahmini",
+     r"s_{jel} \approx C\,\sqrt{\alpha_p\, t_{bekleme}}",
+     rf"{L(dip.C, 3)} \cdot \sqrt{{{L(alpha_p)} \cdot {L(dip.t_wait)}}}\;\text{{m}}",
+     rf"{L(mm(dip.C * np.sqrt(alpha_p * dip.t_wait)))}\;\text{{mm}}",
+     f"D3 sonucu: {num(mm(dip.s_jel), 3)} mm. Aynı mertebede olmaları beklenir.")
 assumptions([
     "Jelleşme gizli ısısı ihmal edildi.",
     "Banyodaki konveksiyon (sıvı hareketi) ihmal edildi; ısı yalnızca iletimle yayılır.",
@@ -145,5 +179,5 @@ assumptions([
     "Uzak sınır T = T_b, yüzeyden en az 5·√(α_p·t_bekleme) ve 3 mm uzakta.",
     "Sayısal çözüm: Crank–Nicolson (ilk adımlar tam örtük), mandrel ve plastisol arasında harmonik "
     "ortalama iletkenlik.",
-] + (["2. daldırmada 1. kat + tel bölgesi plastisol özellikleriyle tek katı katman sayıldı."]
-     if dip.index == 2 else []))
+] + (["2. daldırmada katmanlar: mandrel, iç PVC katmanı (plastisol özellikleri) ve tel halkası "
+      "(4. Tel halkası sayfası)."] if dip.index == 2 else []))

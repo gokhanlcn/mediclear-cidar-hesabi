@@ -2,6 +2,7 @@ import streamlit as st
 
 from physics.units import from_si
 from ui import charts, compute, state
+from ui.calc import L, step
 from ui.common import assumptions, draft_banner, explain, num, show_fig
 
 st.title("5. Toplam ve spiralli cidar (D9, D11)")
@@ -28,25 +29,34 @@ dips = [res.dip1] + ([res.dip2] if res.dip2 else [])
 
 # --- D9 -------------------------------------------------------------------------------
 st.header("D9 – Kür sonrası kalınlık")
-st.latex(r"s_{\text{kür}} \approx (1 - \varepsilon)(s_{jel} + h), \qquad h_{kuru} = \varphi\, h \;\text{(organosol)}")
-rows = []
+phi = p.get("phi", 1.0) if s.material_type == "Organosol" else 1.0
 for d in dips:
-    rows.append({"Daldırma": f"{d.index}.", "T_m0 [°C]": num(degC(d.T_m0), 1), "t_bekleme [s]": num(d.t_wait, 1),
-                 "s_jel [mm]": num(mm(d.s_jel), 3), "h (ort.) [mm]": num(mm(d.h), 3),
-                 "s_toplam [mm]": num(mm(d.s_toplam), 3), "s_kür [mm]": num(mm(d.s_kur), 3)})
-st.dataframe(rows, hide_index=True)
-st.caption(f"ε = {num(p['eps'], 3)}" + (f", φ = {num(p.get('phi', 1.0), 2)} (organosol)" if s.material_type == "Organosol" else ""))
+    step(f"{d.index}. daldırma",
+         r"s_{\text{kür}} = (1 - \varepsilon)\,(s_{jel} + \varphi\, \bar h)",
+         rf"(1 - {L(p['eps'])}) \cdot ({L(mm(d.s_jel))} + {L(phi)} \cdot {L(mm(d.h))})\;\text{{mm}}",
+         rf"{L(mm(d.s_kur))}\;\text{{mm}}",
+         f"T_m0 = {num(degC(d.T_m0), 1)} °C, t_bekleme = {num(d.t_wait, 1)} s. "
+         "φ: plastisolde 1, organosolde katı oranı (h_kuru = φ·h).")
 
 # --- D11 ------------------------------------------------------------------------------
 st.header("D11 – Toplam cidar ve hedef")
-st.latex(r"w = \frac{OD - ID}{2} = s_{\text{iç}} + d_{tel} + s_{\text{dış}}")
+if res.dip2 is not None:
+    step("Hesaplanan cidar (spiralli tüp)",
+         r"w = s_1 + d_{tel} + s_2",
+         rf"{L(mm(res.dip1.s_kur))} + {L(mm(p['d_wire']))} + {L(mm(res.dip2.s_kur))}\;\text{{mm}}",
+         rf"{L(mm(res.w))}\;\text{{mm}}", "s_1: iç katman (1. daldırma), s_2: telin tepesinden itibaren örtü (2. daldırma).")
+else:
+    step("Hesaplanan cidar (tek daldırma)", r"w = s_{\text{kür}}", None, rf"{L(mm(res.w))}\;\text{{mm}}")
+step("Hedef cidar (şartname)",
+     r"w_{hedef} = \frac{OD - ID}{2} \pm \frac{\Delta OD}{2}",
+     rf"\frac{{{L(mm(p['OD']))} - {L(mm(p['ID']))}}}{{2}} \pm \frac{{{L(mm(p['OD_tol']))}}}{{2}}\;\text{{mm}}",
+     rf"{L(mm(res.w_target))} \pm {L(mm(res.w_tol))}\;\text{{mm}}")
 OD_calc = p["ID"] + 2 * res.w
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Hesaplanan w", f"{num(mm(res.w), 3)} mm")
-c2.metric("Hedef w", f"{num(mm(res.w_target), 3)} ± {num(mm(res.w_tol), 3)} mm")
-c3.metric("Sapma", f"{'+' if res.deviation >= 0 else ''}{num(mm(res.deviation), 3)} mm",
-          help="Hesaplanan − hedef. Pozitif: cidar kalın; negatif: ince.")
-c4.metric("Hesaplanan OD", f"{num(mm(OD_calc), 3)} mm", help=f"ID + 2w; hedef {num(mm(p['OD']), 2)} ± {num(mm(p['OD_tol']), 2)} mm")
+step("Sapma ve hesaplanan dış çap",
+     r"\Delta w = w - w_{hedef}, \qquad OD = ID + 2w",
+     rf"{L(mm(res.w))} - {L(mm(res.w_target))},\qquad {L(mm(p['ID']))} + 2 \cdot {L(mm(res.w))}\;\text{{mm}}",
+     rf"\Delta w = {L(mm(res.deviation))}\;\text{{mm}},\quad OD = {L(mm(OD_calc))}\;\text{{mm}}",
+     "Pozitif sapma: cidar hedeften kalın; negatif: ince.")
 if res.ok:
     st.success(f"## ✅ Uygun\nCidar hedef tolerans içinde (sapma {num(mm(res.deviation), 3)} mm).")
 else:
@@ -57,7 +67,6 @@ else:
              f"{'düşür' if yon == 'kalın' else 'artır'}).")
 
 # Cidar bileşimi grafiği
-phi = p.get("phi", 1.0) if s.material_type == "Organosol" else 1.0
 show_fig(charts.wall_composition(res, p["eps"], phi, p.get("d_wire", 0.0)), "D11_cidar_bilesimi", height=330)
 explain("Çubuk, tüp cidarını içten dışa katmanlarına ayırır: 1. daldırmanın jel ve film kısmı, yay teli "
         "ve 2. daldırmanın jel ve film kısmı. Yeşil bant şartnamedeki hedef aralıktır; çubuğun ucu bu "

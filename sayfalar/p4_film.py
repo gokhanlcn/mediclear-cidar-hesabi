@@ -5,6 +5,7 @@ import streamlit as st
 from physics import film
 from physics.units import from_si, to_si
 from ui import compute, state
+from ui.calc import L, step
 from ui.common import COLORS, assumptions, draft_banner, explain, num, show_fig
 from ui.dips import select_dip
 
@@ -26,11 +27,12 @@ st.caption(f"Film, jel katmanının dış yüzeyine (yarıçap R_s + s_jel = {nu
 
 # --- D5 -------------------------------------------------------------------------------
 st.header("D5 – Viskozitenin sıcaklığa bağlılığı")
-st.latex(r"\eta(T) = \eta_{ref} \exp\left[\frac{E_a}{R_g}\left(\frac{1}{T} - \frac{1}{T_{ref}}\right)\right]")
-c1, c2, c3 = st.columns(3)
-c1.metric("η(T_b) – banyo sıcaklığında", f"{num(dip.eta_b, 3)} Pa·s")
-c2.metric("η_ref", f"{num(p['eta_ref'], 3)} Pa·s", help=f"T_ref = {num(from_si(p['T_ref'], '°C'), 1)} °C'de")
-c3.metric("T_b", f"{num(from_si(p['T_b'], '°C'), 1)} °C")
+TbK, TrefK = p["T_b"], p["T_ref"]
+step("Banyo sıcaklığındaki viskozite (Arrhenius)",
+     r"\eta(T_b) = \eta_{ref}\,\exp\left[\frac{E_a}{R_g}\left(\frac{1}{T_b} - \frac{1}{T_{ref}}\right)\right]",
+     rf"{L(p['eta_ref'])} \cdot \exp\left[\frac{{{L(p['E_a'])}}}{{{L(film.R_GAS)}}}\left(\frac{{1}}{{{L(TbK)}}} - "
+     rf"\frac{{1}}{{{L(TrefK)}}}\right)\right]", rf"{L(dip.eta_b)}\;\text{{Pa·s}}",
+     "Sıcaklıklar kelvin (K). R_g = 8,314 J/(mol·K) evrensel gaz sabitidir.")
 Tc = np.linspace(min(15.0, from_si(p["T_b"], "°C") - 5), max(50.0, from_si(p["T_b"], "°C") + 5), 100)
 fig = go.Figure()
 fig.add_scatter(x=Tc, y=film.viscosity(p["eta_ref"], p["E_a"], to_si(Tc, "°C"), p["T_ref"]),
@@ -48,11 +50,17 @@ explain("Eğri plastisolün sıcaklık arttıkça nasıl akışkanlaştığını
 
 # --- D6 -------------------------------------------------------------------------------
 st.header("D6 – Boyutsuz sayılar")
-st.latex(r"Ca = \frac{\eta U}{\gamma}, \qquad \ell_c = \sqrt{\frac{\gamma}{\rho_p g}}")
-c1, c2, c3 = st.columns(3)
-c1.metric("Kapiler sayı Ca", num(fc.Ca, 4), help="Viskoz kuvvetin yüzey gerilimine oranı.")
-c2.metric("Kapiler uzunluk ℓ_c", f"{num(mm(fc.l_c), 3)} mm")
-c3.metric("R / ℓ_c", num(R_film / fc.l_c, 2), help="Filmin sürüklendiği yüzeyin yarıçapının kapiler uzunluğa oranı.")
+step("Kapiler sayı",
+     r"Ca = \frac{\eta\, U}{\gamma}",
+     rf"\frac{{{L(dip.eta_b)} \cdot {L(p['U'])}}}{{{L(p['gamma'])}}}", L(fc.Ca),
+     "Viskoz kuvvetin yüzey gerilimine oranı (U m/s cinsinden).")
+step("Kapiler uzunluk",
+     r"\ell_c = \sqrt{\frac{\gamma}{\rho_p\, g}}",
+     rf"\sqrt{{\frac{{{L(p['gamma'])}}}{{{L(p['rho_p'])} \cdot {L(p['g'])}}}}}\;\text{{m}}",
+     rf"{L(mm(fc.l_c))}\;\text{{mm}}")
+step("Yarıçap oranı",
+     r"\frac{R}{\ell_c}", rf"\frac{{{L(mm(R_film))}}}{{{L(mm(fc.l_c))}}}", L(R_film / fc.l_c, 3),
+     "R: filmin sürüklendiği yüzeyin (jel yüzeyi) yarıçapı.")
 crit = film.md_criteria(R_film, fc.Ca, fc.l_c)
 st.markdown("**.md D6 koşulları** (bilgi amaçlı; \"≫\" ve \"≲\" için sayısal sınır tanımlı değildir, formülü "
             "kullanıcı seçer):\n\n" + "\n".join(f"- **{k}**: {cond} → bu değerlerle {vals}" for k, cond, vals in crit))
@@ -60,17 +68,32 @@ st.success(f"**Kullanılan formül (0. Veri girişinde seçildi): {film.FORMULA_
 
 # --- D7 -------------------------------------------------------------------------------
 st.header("D7 – Sürüklenen film kalınlığı")
-st.latex(r"\text{D7a: } h = C_{LLD} \frac{(\eta U)^{2/3}}{\gamma^{1/6} (\rho_p g)^{1/2}} \qquad "
-         r"\text{D7b: } h = C_{fib}\, R\, Ca^{2/3} \qquad "
-         r"\text{D7c: } h = C_{grav} \sqrt{\frac{\eta U}{\rho_p g}}")
-st.caption(f"Katsayılar (0. Veri girişi → Model katsayıları): C_LLD = {num(p['C_lld'], 3)}, "
-           f"C_fib = {num(p['C_fib'], 3)}, C_grav = {num(p['C_grav'], 3)}")
-cols = st.columns(4)
-for col, key in zip(cols, ["D7a", "D7b", "D7c"]):
-    col.metric(key + (" ✔" if key == fc.formula or (fc.formula == "min_ac" and key in ("D7a", "D7c")) else ""),
-               f"{num(mm(fc.values[key]), 3)} mm")
-cols[3].metric("Kullanılan h_0", f"{num(mm(fc.h0), 3)} mm", help="Çekme anındaki film kalınlığı (seçilen formül).")
-
+eta, U_, gam, rg = dip.eta_b, p["U"], p["gamma"], p["rho_p"] * p["g"]
+D7 = {
+    "D7a": ("D7a – Landau–Levich–Derjaguin",
+            r"h = C_{LLD}\,\frac{(\eta U)^{2/3}}{\gamma^{1/6}\,(\rho_p g)^{1/2}}",
+            rf"{L(p['C_lld'])} \cdot \frac{{({L(eta)} \cdot {L(U_)})^{{2/3}}}}{{{L(gam)}^{{1/6}} \cdot ({L(rg)})^{{1/2}}}}\;\text{{m}}"),
+    "D7b": ("D7b – Fiber kaplama",
+            r"h = C_{fib}\,R\,Ca^{2/3}",
+            rf"{L(p['C_fib'])} \cdot {L(R_film)} \cdot {L(fc.Ca)}^{{2/3}}\;\text{{m}}"),
+    "D7c": ("D7c – Viskoz–yerçekimi",
+            r"h = C_{grav}\,\sqrt{\frac{\eta\, U}{\rho_p\, g}}",
+            rf"{L(p['C_grav'])} \cdot \sqrt{{\frac{{{L(eta)} \cdot {L(U_)}}}{{{L(rg)}}}}}\;\text{{m}}"),
+}
+used = ["D7a", "D7c"] if fc.formula == "min_ac" else [fc.formula]
+for k in used:
+    title, form, sub = D7[k]
+    step(f"{title} (seçilen formül)" if fc.formula != "min_ac" else title, form, sub,
+         rf"{L(mm(fc.values[k]))}\;\text{{mm}}")
+if fc.formula == "min_ac":
+    step("Kullanılan film kalınlığı (Rev. 2 yaklaşımı)",
+         r"h_0 = \min(h_{D7a},\, h_{D7c})",
+         rf"\min({L(mm(fc.values['D7a']))},\; {L(mm(fc.values['D7c']))})\;\text{{mm}}",
+         rf"{L(mm(fc.h0))}\;\text{{mm}}")
+others = [k for k in ("D7a", "D7b", "D7c") if k not in used]
+st.caption("Karşılaştırma (seçilmeyen formüller, aynı girdilerle): "
+           + ", ".join(f"{k} = {num(mm(fc.values[k]), 3)} mm" for k in others)
+           + ". Katsayılar 0. Veri girişi → Model katsayıları sekmesindedir.")
 U_now = p["U"]
 U = np.geomspace(min(0.05e-3, U_now / 5), max(20e-3, 5 * U_now), 240)
 vals = film.all_formulas(R_film, dip.eta_b, U, p["gamma"], p["rho_p"], p["g"], p["C_lld"], p["C_fib"], p["C_grav"])
@@ -90,18 +113,28 @@ explain("Noktalı çizgiler üç formülün verdiği film kalınlığını, siya
         "formülü gösterir. Yıldız tablodaki çekme hızıdır: daha hızlı çekmek daha kalın film demektir.")
 # --- D8 -------------------------------------------------------------------------------
 st.header("D8 – Süzülme ve akma gerilmesi")
-st.latex(r"h(x,t) \approx \sqrt{\frac{\eta\, x}{\rho_p g\, t}}, \qquad h_{dur} = C_{dur}\,\frac{\tau_y}{\rho_p g}")
-L = p["L"]
-x = np.linspace(0, L, 400)
+L_dip = p["L"]
+x = np.linspace(0, L_dip, 400)
 args = (dip.h0, dip.eta_b, p["rho_p"], p["g"], dip.h_stop)
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Üst uç", f"{num(mm(dip.h_top), 3)} mm")
-c2.metric("Alt uç", f"{num(mm(dip.h_bottom), 3)} mm")
-c3.metric("Üst–alt farkı", f"{num(mm(dip.h_bottom - dip.h_top), 3)} mm")
-c4.metric("Boy boyunca ortalama h", f"{num(mm(dip.h), 3)} mm",
-          help="Toplam kalınlıkta (D9) bu ortalama kullanılır; tartım (D10) da ortalama kalınlık verir.")
-if dip.h_stop >= dip.h0:
-    st.info(f"h_dur = {num(mm(dip.h_stop), 3)} mm ≥ h_0: akma gerilmesi filmi tutuyor, süzülme olmaz.")
+step("Akma gerilmesinin durdurduğu kalınlık",
+     r"h_{dur} = C_{dur}\,\frac{\tau_y}{\rho_p\, g}",
+     rf"{L(p['C_dur'])} \cdot \frac{{{L(p['tau_y'])}}}{{{L(p['rho_p'])} \cdot {L(p['g'])}}}\;\text{{m}}",
+     rf"{L(mm(dip.h_stop))}\;\text{{mm}}")
+if dip.h_stop >= dip.h0 or p["t_drain"] <= 0:
+    st.info(f"h_dur = {num(mm(dip.h_stop), 3)} mm ≥ h_0 = {num(mm(dip.h0), 3)} mm (ya da t_süz = 0): akma "
+            "gerilmesi filmi tutuyor, süzülme olmaz; film boy boyunca h_0 kalınlığındadır.")
+else:
+    t_d = p["t_drain"]
+    step("Süzülme profili, alt uç (x = L, t = t_süz)",
+         r"h(x,t) = \sqrt{\frac{\eta\, x}{\rho_p\, g\, t}},\qquad h_{dur} \le h \le h_0",
+         rf"\sqrt{{\frac{{{L(dip.eta_b)} \cdot {L(L_dip)}}}{{{L(p['rho_p'])} \cdot {L(p['g'])} \cdot {L(t_d)}}}}}\;\text{{m}}"
+         rf"\;\rightarrow\; \min(\cdot,\, h_0)",
+         rf"{L(mm(dip.h_bottom))}\;\text{{mm}}",
+         f"Üst uç (x = 0): {num(mm(dip.h_top), 3)} mm. Fark: {num(mm(dip.h_bottom - dip.h_top), 3)} mm.")
+step("Boy boyunca ortalama film (D9'a giren h)",
+     r"\bar h = \frac{1}{L}\int_0^L h(x, t_{\text{süz}})\,dx",
+     rf"\frac{{1}}{{{L(L_dip)}}}\int_0^{{{L(L_dip)}}} h\,dx \;\;(\text{{sayısal integral, 401 nokta}})",
+     rf"{L(mm(dip.h))}\;\text{{mm}}", "Tartım (D10) da ortalama kalınlık verdiği için toplamda ortalama kullanılır.")
 fig = go.Figure()
 t_d = p["t_drain"]
 for f, dash in ((0.25, "dot"), (4.0, "dash")):
