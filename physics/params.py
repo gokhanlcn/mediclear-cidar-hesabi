@@ -91,15 +91,16 @@ def project_table() -> pd.DataFrame:
 
     Belgede ters tasarımla belirlenecek olarak bırakılan değerler boştur; Not sütunu nedenini söyler.
     """
-    from .project_data import PROJECT_DATA, DOC
+    from .project_data import PROJECT_DATA, DOC, OWN_SOURCE
     df = empty_table()
     for k, (val, src, note) in PROJECT_DATA.items():
         if k not in TABLE_KEYS:
             continue
         sel = df.Kod == k
         df.loc[sel, VALUE_COL] = np.nan if val is None else float(val)
-        # Rev. 2 belgesinden gelen değerlerin kaynağı veriler.md değil, Rev. 2'dir
-        df.loc[sel, "Kaynak"] = "" if not src else (src if src.startswith("Rev. 2") else f"{DOC}: {src}")
+        # Rev. 2 belgesinden ve Özet Rapor'dan gelen değerlerin kaynağı veriler.md değildir
+        own = src.startswith("Rev. 2") or k in OWN_SOURCE
+        df.loc[sel, "Kaynak"] = "" if not src else (src if own else f"{DOC}: {src}")
         df.loc[sel, "Not"] = note
     return df
 

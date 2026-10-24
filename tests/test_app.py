@@ -26,10 +26,17 @@ def test_home_page_opens():
     assert any("Daldırma Cidar" in t.value for t in at.title)
 
 
-def test_parameter_page_example_and_draft():
+def _empty_app():
+    """Tablosu temizlenmiş uygulama (açılışta proje verileri tam dolu gelir)."""
     at = _app()
     at.switch_page("sayfalar/p1_parametre.py").run()
+    next(b for b in at.button if "temizle" in b.label).click().run()
     assert not at.exception
+    return at
+
+
+def test_parameter_page_example_and_draft():
+    at = _empty_app()
     assert "hata" in _texts(at)                   # boş tablo
     next(b for b in at.button if "Örnek" in b.label).click().run()
     assert not at.exception
@@ -97,7 +104,7 @@ def test_report_page_full_flow():
 
 @pytest.mark.parametrize("page", CALC_PAGES)
 def test_calculation_pages_blocked_without_data(page):
-    at = _app()
+    at = _empty_app()
     at.switch_page(page).run()
     assert not at.exception
     assert any("hata" in e.value for e in at.error)
@@ -151,3 +158,11 @@ def test_inverse_layer_targets():
     # örnek veri setinde (ID 4 / OD 6, tel 0,3) örtüye 0,15 mm kalır; her satır ya çözülür ya da nedenini söyler
     assert all((s.T_m0 is not None and s.T_m0_2 is not None) or s.note for s in sols)
     assert any("U düşürülmeli" in s.note for s in sols)
+
+
+def test_project_data_opens_ready():
+    """Açılıştaki proje verileri (Özet Rapor, 24.10.2026) eksiksiz: toplam sayfası hesaplar."""
+    at = _app()
+    at.switch_page("sayfalar/p5_toplam.py").run()
+    assert not at.exception, at.exception
+    assert not [e for e in at.error if "Uygun değil" not in e.value], [e.value for e in at.error]
