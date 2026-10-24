@@ -56,7 +56,7 @@ def furnace_columns(p: dict, R: float, T_m0: float) -> dict:
 # A. Katman hedefinden ayar bulma
 # =======================================================================================
 if mode.startswith("A"):
-    solved = {"U", "T_m0", "T_m0_2", "T_s1", "T_t", "t_pre"}
+    solved = {"U", "U_2", "T_m0", "T_m0_2", "T_s1", "T_t", "t_pre"}
     v = state.require_ready(optional=solved)
     s = state.settings()
     draft_banner(v, s)
@@ -111,7 +111,7 @@ if mode.startswith("A"):
     R = p["ID"] / 2
     rows = []
     for so in sols:
-        row = {"U [mm/s]": round(so.U * 1e3, 3),
+        row = {"U [mm/s]": round(so.U * 1e3, 3),     # bu satırda iki daldırmanın da çekme hızı
                "T_m0 [°C]": None if so.T_m0 is None else round(degC(so.T_m0), 1),
                "1. kat jel [mm]": None if so.s_jel1 is None else round(mm(so.s_jel1), 3),
                "1. kat film [mm]": None if so.h1 is None else round(mm(so.h1), 3)}
@@ -156,12 +156,15 @@ if mode.startswith("A"):
 
     st.subheader("Ayar tablosu")
     st.dataframe(df.astype(object).where(df.notna(), "–"), hide_index=True, width="stretch")
-    st.caption("Jel + film, katmanın kür öncesi parçalarıdır; kür çekmesi (1 − ε) ile hedef kür sonrası kalınlığa "
+    st.caption("**Farklı çekme hızları:** Her satırda iki daldırma da o satırın U değeriyle çekilir. 1. katın kalınlığı "
+               "hedefe sabitlendiği için iki daldırma birbirini etkilemez: 1. tank için T_m0'ı U_1 satırından, 2. tank "
+               "için T_m0,2'yi U_2 satırından okuyabilirsin. "
+               "Jel + film, katmanın kür öncesi parçalarıdır; kür çekmesi (1 − ε) ile hedef kür sonrası kalınlığa "
                "eşitlenir. Gerekli fırın çıkışı: banyoya bu T_m0 ile girmek için fırından çıkış sıcaklığı (taşıma "
                "soğumasının tersi). Gerekli t_ön: tablodaki T_fırın ile bu çıkış sıcaklığına ulaşma süresi (D1).")
     st.download_button("💾 Ayar tablosunu CSV olarak indir", df.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
                        file_name="ters_tasarim_katman_hedefi.csv", mime="text/csv")
-    st.info("Bir satırı uygulamak için 0. Veri girişinde U'yu, hesap ayarlarında T_m0'ı **doğrudan gir** seçip T_m0'ı "
+    st.info("Bir satırı uygulamak için 0. Veri girişinde U'yu (ve Tel / 2. daldırma sekmesinde U_2'yi), hesap ayarlarında T_m0'ı **doğrudan gir** seçip T_m0'ı "
             "ve Tel / 2. daldırma sekmesinde T_m0,2, T_s1, T_t'yi bu değerlerle doldur; ardından diğer sayfalarda "
             "normal ağla doğrula.")
     assumptions([
@@ -200,6 +203,7 @@ LIMITS = {
     "T_m0": (math.floor(Tg_c), 400.0, (math.ceil(Tg_c + 2), Tg_c + 100), 1.0),
     "t_wait": (0.5, 300.0, (1.0, 30.0), 0.5),
     "U": (0.05, 20.0, (0.1, 5.0), 0.05),
+    "U_2": (0.05, 20.0, (0.1, 5.0), 0.05),
     "t_drain": (0.0, 600.0, (0.0, 120.0), 1.0),
 }
 

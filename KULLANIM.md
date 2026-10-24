@@ -71,7 +71,8 @@ sonuç** biçiminde gösterilir; her grafiğin altında **"Bu grafik ne gösteri
    - Tablo: Sembol | Parametre | Birim | **Değer** | **Kaynak** | Not. Hücreye çift tıkla, yaz, **Enter**'a bas.
      Her satırın ne olduğu **Açıklama** sütununda ve sekmenin altındaki listede yazar.
    - Sekmeler: Plastisol · Mandrel · Proses · Ürün · **Tel / 2. daldırma** (d, hatve p, tel malzemesi,
-     2. daldırmada mandrel / iç katman / tel sıcaklıkları, bekleme süresi) · **Model katsayıları**
+     2. daldırmada mandrel / iç katman / tel sıcaklıkları, bekleme süresi ve **2. tanktan çekme hızı U_2** –
+     1. daldırmadaki U'dan farklı olabilir) · **Model katsayıları**
      (C_LLD, C_fib, C_grav, C_dur).
    - **Film formülü otomatik seçilir:** R > ℓ_c (levha) ise h = min(D7a, D7c), değilse D7b. Sayısal eşik
      yoktur; iki dal Ca* = (C_grav/C_LLD)⁶ noktasında kendiliğinden kesişir (Model katsayıları sekmesinde açıklanır).

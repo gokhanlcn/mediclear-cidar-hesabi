@@ -141,7 +141,7 @@ def test_project_table_matches_veriler_md():
     for k, (val, src, _) in PROJECT_DATA.items():
         row = df[df.Kod == k].iloc[0]
         assert (np.isnan(row[VALUE_COL]) if val is None else bool(row.Kaynak))
-    assert set(missing_keys()) == {"t_pre", "T_m0", "U", "t_drain"}
+    assert set(missing_keys()) == {"t_pre", "T_m0", "U", "U_2", "t_drain"}
     ps = params.project_settings()
     assert ps.mandrel_material == "316L paslanmaz" and ps.T_m0_mode == "D1"
     assert v["T_m0_2"] == pytest.approx(371.65) and v["T_t"] == pytest.approx(368.65)
@@ -157,7 +157,7 @@ def test_t_pre_not_required_in_direct_mode():
 def test_project_data_runs_once_open_values_given():
     from physics.model import Options, run_model
     df = params.project_table()
-    for k, val in (("t_pre", 300.0), ("U", 1.0), ("t_drain", 10.0)):
+    for k, val in (("t_pre", 300.0), ("U", 1.0), ("U_2", 1.5), ("t_drain", 10.0)):
         df = _set(df, k, val=val, Kaynak="test")
     s = params.project_settings()
     assert not params.validate(df, s).errors

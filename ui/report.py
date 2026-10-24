@@ -117,6 +117,7 @@ def build_report(df: pd.DataFrame, s: Settings, res: ModelResult, p: dict,
                  f"<div class='kpi'>Durum{status}</div></div>")
     dips = [res.dip1] + ([res.dip2] if res.dip2 else [])
     rows = [{"Daldırma": f"{d.index}.", "T_m0 [°C]": from_si(d.T_m0, "°C"), "t_bekleme [s]": d.t_wait,
+             "U [mm/s]": d.U * 1e3,
              "s_max (D2) [mm]": mm(d.s_max), "s_jel (D3) [mm]": mm(d.s_jel), "C (D4)": d.C,
              "D7 formülü": d.film.formula,
              "h_0 [mm]": mm(d.h0), "h ort. (D8) [mm]": mm(d.h), "s_kür (D9) [mm]": mm(d.s_kur)} for d in dips]

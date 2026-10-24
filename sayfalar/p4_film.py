@@ -52,8 +52,9 @@ explain("Eğri plastisolün sıcaklık arttıkça nasıl akışkanlaştığını
 st.header("D6 – Boyutsuz sayılar")
 step("Kapiler sayı",
      r"Ca = \frac{\eta\, U}{\gamma}",
-     rf"\frac{{{L(dip.eta_b)} \cdot {L(p['U'])}}}{{{L(p['gamma'])}}}", L(fc.Ca),
-     "Viskoz kuvvetin yüzey gerilimine oranı (U m/s cinsinden).")
+     rf"\frac{{{L(dip.eta_b)} \cdot {L(dip.U)}}}{{{L(p['gamma'])}}}", L(fc.Ca),
+     f"Viskoz kuvvetin yüzey gerilimine oranı. U = {num(dip.U * 1e3, 3)} mm/s ({dip.index}. daldırmanın çekme hızı, "
+     "m/s cinsinden yerine konur).")
 step("Kapiler uzunluk",
      r"\ell_c = \sqrt{\frac{\gamma}{\rho_p\, g}}",
      rf"\sqrt{{\frac{{{L(p['gamma'])}}}{{{L(p['rho_p'])} \cdot {L(p['g'])}}}}}\;\text{{m}}",
@@ -70,7 +71,7 @@ st.success(f"**Otomatik seçim:** {fc.reason}")
 
 # --- D7 -------------------------------------------------------------------------------
 st.header("D7 – Sürüklenen film kalınlığı")
-eta, U_, gam, rg = dip.eta_b, p["U"], p["gamma"], p["rho_p"] * p["g"]
+eta, U_, gam, rg = dip.eta_b, dip.U, p["gamma"], p["rho_p"] * p["g"]
 D7 = {
     "D7a": ("D7a – Landau–Levich–Derjaguin",
             r"h = C_{LLD}\,\frac{(\eta U)^{2/3}}{\gamma^{1/6}\,(\rho_p g)^{1/2}}",
@@ -95,7 +96,7 @@ others = [k for k in ("D7a", "D7b", "D7c") if k not in used]
 st.caption("Karşılaştırma (bu geometride kullanılmayan formül): "
            + ", ".join(f"{k} = {num(mm(fc.values[k]), 3)} mm" for k in others)
            + ". Katsayılar 0. Veri girişi → Model katsayıları sekmesindedir.")
-U_now = p["U"]
+U_now = dip.U
 U = np.geomspace(min(0.05e-3, U_now / 5), max(20e-3, 5 * U_now), 240)
 vals = film.all_formulas(R_film, dip.eta_b, U, p["gamma"], p["rho_p"], p["g"], p["C_lld"], p["C_fib"], p["C_grav"])
 styles = {"D7a": COLORS["line"], "D7b": COLORS["ok"], "D7c": COLORS["accent"]}

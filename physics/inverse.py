@@ -19,7 +19,8 @@ from .model import ModelError, Options, run_model
 AXES: dict[str, tuple[str, str]] = {
     "T_m0": ("T_m0 – 1. daldırmada mandrel sıcaklığı", "°C"),
     "t_wait": ("t_bekleme – 1. daldırmada bekleme süresi", "s"),
-    "U": ("U – çekme hızı", "mm/s"),
+    "U": ("U – 1. daldırmada çekme hızı", "mm/s"),
+    "U_2": ("U_2 – 2. daldırmada çekme hızı", "mm/s"),
     "t_drain": ("t_süz – süzülme süresi", "s"),
 }
 
@@ -133,6 +134,8 @@ def solve_layers(p: dict, opt: Options, U_values, s1_target: float, s2_target: f
     Kalınlık sıcaklıkla monoton artar: T ≤ T_g'de jel yoktur, kalınlık yalnızca filmdir. Bu yüzden
     T_g'nin hemen üstünde kalınlık hedeften büyükse hedef o U ile tutturulamaz (film tek başına fazla);
     T_max'ta hedeften küçükse arama aralığı yetmez. link_T2: T_s1 ve T_t de T_m0,2 ile birlikte değişir.
+    Her satırda 2. daldırma da aynı U ile çekilir (U_2 = U). 1. kat hedefe sabitlendiği için iki daldırma
+    birbirinden bağımsızdır: farklı hızlar için T_m0 bir satırdan, T_m0,2 başka bir satırdan okunabilir.
     """
     o1 = replace(opt, spiral=False, T_m0_mode="direct", keep_details=False)   # 1. kat tek başına
     o2 = replace(opt, T_m0_mode="direct", keep_details=False)
@@ -154,8 +157,8 @@ def solve_layers(p: dict, opt: Options, U_values, s1_target: float, s2_target: f
                 sol.T_m0, sol.s_jel1, sol.h1 = T1, r1.s_jel, r1.h
                 q1 = {**q, "T_m0": T1}
 
-                def args(T):
-                    return {**q1, "T_m0_2": T, **({"T_s1": T, "T_t": T} if link_T2 else {})}
+                def args(T):      # 2. daldırma da bu satırın U'su ile çekilir (U_2 = U)
+                    return {**q1, "U_2": U, "T_m0_2": T, **({"T_s1": T, "T_t": T} if link_T2 else {})}
                 s2 = lambda T: run_model(args(T), o2).dip2.s_kur - s2_target  # noqa: E731
                 if s2(T_lo) > 0:
                     sol.note = "Film tek başına örtü hedefinden kalın → U düşürülmeli"

@@ -22,7 +22,8 @@ base = compute.run()
 mm = lambda x: from_si(x, "mm")  # noqa: E731
 degC = lambda T: from_si(T, "°C")  # noqa: E731
 
-INPUT_COLS = ["ID [mm]", "OD hedefi [mm]", "± OD [mm]", "d_tel [mm]", "T_m0 [°C]", "t_bekleme [s]", "U [mm/s]"]
+INPUT_COLS = ["ID [mm]", "OD hedefi [mm]", "± OD [mm]", "d_tel [mm]", "T_m0 [°C]", "t_bekleme [s]", "U [mm/s]",
+              "U_2 [mm/s]"]
 
 
 def _default_row() -> dict:
@@ -30,7 +31,8 @@ def _default_row() -> dict:
     T0 = None if s.T_m0_mode == "D1" else round(degC(p["T_m0"]), 1)
     return {"ID [mm]": mm(p["ID"]), "OD hedefi [mm]": mm(p["OD"]), "± OD [mm]": mm(p["OD_tol"]),
             "d_tel [mm]": mm(p.get("d_wire", 0.0)), "T_m0 [°C]": T0,
-            "t_bekleme [s]": p["t_wait"], "U [mm/s]": p["U"] * 1e3}
+            "t_bekleme [s]": p["t_wait"], "U [mm/s]": p["U"] * 1e3 if "U" in p else None,
+            "U_2 [mm/s]": p["U_2"] * 1e3 if "U_2" in p else None}
 
 
 if "numara_in" not in st.session_state:
@@ -70,7 +72,8 @@ def _row_inputs(r: pd.Series) -> tuple[dict, dict]:
     pr["OD_tol"] = to_si(get("± OD [mm]", mm(p["OD_tol"])), "mm")
     pr["d_wire"] = to_si(get("d_tel [mm]", mm(p.get("d_wire", 0.0))), "mm")
     pr["t_wait"] = get("t_bekleme [s]", p["t_wait"])
-    pr["U"] = to_si(get("U [mm/s]", p["U"] * 1e3), "mm/s")
+    pr["U"] = to_si(get("U [mm/s]", p.get("U", float("nan")) * 1e3), "mm/s")
+    pr["U_2"] = to_si(get("U_2 [mm/s]", p.get("U_2", float("nan")) * 1e3), "mm/s")
     over = {}
     T = r.get("T_m0 [°C]")
     if T is not None and not pd.isna(T):
@@ -91,7 +94,8 @@ if st.button("▶️ Tümünü hesapla", type="primary"):
         opt = compute.options(keep_details=False, **over)
         rec = {"ID [mm]": mm(pr["ID"]), "R [mm]": mm(pr["ID"] / 2), "OD hedefi [mm]": mm(pr["OD"]),
                "w hedefi [mm]": mm((pr["OD"] - pr["ID"]) / 2), "d_tel [mm]": mm(pr["d_wire"]) if s.spiral else 0.0,
-               "t_bekleme,1 [s]": pr["t_wait"], "U [mm/s]": pr["U"] * 1e3}
+               "t_bekleme,1 [s]": pr["t_wait"], "U [mm/s]": pr["U"] * 1e3,
+               "U_2 [mm/s]": pr["U_2"] * 1e3 if s.spiral else None}
         try:
             if pr["OD"] <= pr["ID"]:
                 raise ModelError("OD hedefi ID'den büyük olmalı.")
@@ -117,7 +121,7 @@ res_df = st.session_state.get("numara_res")
 if res_df is not None:
     st.subheader("Sonuçlar")
     order = ["ID [mm]", "R [mm]", "OD hedefi [mm]", "w hedefi [mm]", "d_tel [mm]", "T_m0,1 [°C]",
-             "t_bekleme,1 [s]", "U [mm/s]", "s_jel,1 [mm]", "h_1 [mm]", "s_1 [mm]", "s_jel,2 [mm]", "h_2 [mm]",
+             "t_bekleme,1 [s]", "U [mm/s]", "U_2 [mm/s]", "s_jel,1 [mm]", "h_1 [mm]", "s_1 [mm]", "s_jel,2 [mm]", "h_2 [mm]",
              "s_2 [mm]", "w [mm]", "OD hesap [mm]", "Sapma [mm]", "Durum"]
     res_df = res_df[[c for c in order if c in res_df.columns]]
     st.dataframe(res_df.round(3), hide_index=True, width="stretch")

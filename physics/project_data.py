@@ -65,6 +65,7 @@ PROJECT_DATA: dict[str, tuple[float | None, str, str]] = {
                "Rev. 2 koşulları: T_m0 = 100 °C, kısmi jel 165 °C, şartlandırma hedefi 100 °C; bunlar değişirse güncellenmeli"),
     "T_s1": (95.9, "Rev. 2 Bölüm 4.4 [H]: daldırma-2 girişinde iç katman yüzeyi", "Aynı Rev. 2 koşulları"),
     "T_t": (95.5, "Rev. 2 Bölüm 4.4 [H]: daldırma-2 girişinde tel", "Aynı Rev. 2 koşulları"),
+    "U_2": (None, "", "Girilecek: 2. tanktan çekme hızı (1. daldırmadan farklı olabilir)"),
     "t_wait_2": (5, "Ters tasarım başlangıcı: 2. daldırmada 5–30 s [25]", "1. daldırmayla aynı"),
     # --- Model katsayıları ----------------------------------------------------------------
     "C_lld": (0.94, "Teori: Landau–Levich (1942) [34], Derjaguin (1943) [35]; [36], [37]", "Geçerlilik Ca ≲ 10⁻² [37]"),

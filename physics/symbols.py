@@ -115,8 +115,8 @@ _add("T_b", "T_b", "Banyo sıcaklığı", "°C", "Proses", "D2, D3, D5",
      "Plastisol banyosunun sıcaklığı.", "20–40", "Tasarım kararı", 25, bound="any")
 _add("t_wait", "t_bekleme", "1. daldırmada bekleme süresi", "s", "Proses", "D3, D4",
      "Mandrelin banyoda hareketsiz beklediği süre.", "Tasarım değişkeni", "–", 10)
-_add("U", "U", "Çekme hızı", "mm/s", "Proses", "D6, D7",
-     "Mandrelin banyodan çekilme hızı (her iki daldırmada).", "Tasarım değişkeni",
+_add("U", "U", "1. daldırmada çekme hızı", "mm/s", "Proses", "D6, D7",
+     "Mandrelin 1. daldırmada banyodan çekilme hızı.", "Tasarım değişkeni",
      "Servo eksen sınırları", 1)
 _add("t_drain", "t_süz", "Süzülme süresi", "s", "Proses", "D8",
      "Çekmeden sonra kür fırınına girene kadar geçen süre.", "Tasarım değişkeni",
@@ -161,6 +161,9 @@ _add("T_s1", "T_s1", "2. daldırmada iç katman sıcaklığı", "°C", "Tel / 2.
 _add("T_t", "T_t", "2. daldırmada tel sıcaklığı", "°C", "Tel / 2. daldırma", "Tel halkası",
      "Yay telinin 2. daldırmaya girişteki sıcaklığı.", "Katman sıcaklığına yakın",
      "Hat tasarımı / ölçüm", 150, bound="any", in_md_table=False)
+_add("U_2", "U_2", "2. daldırmada çekme hızı", "mm/s", "Tel / 2. daldırma", "D6, D7 (2. daldırma)",
+     "Mandrelin 2. daldırmada (ikinci tanktan) çekilme hızı; 1. daldırmadakinden farklı olabilir.",
+     "Tasarım değişkeni", "Servo eksen sınırları", 1, in_md_table=False)
 _add("t_wait_2", "t_bekleme,2", "2. daldırmada bekleme süresi", "s", "Tel / 2. daldırma",
      "D3 (2. daldırma)", "Mandrelin 2. daldırmada banyoda beklediği süre.", "Tasarım değişkeni",
      "–", 10, in_md_table=False)

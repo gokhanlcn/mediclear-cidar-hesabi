@@ -121,10 +121,17 @@ def test_solve_layers_hits_targets_with_project_data():
     ok, too_fast = sols
     assert ok.T_m0 is not None and ok.T_m0_2 is not None and not ok.note
     # bulunan ayarlar gerçekten hedefi verir
-    chk = run_model({**p, "U": 1e-3, "T_m0": ok.T_m0, "T_m0_2": ok.T_m0_2, "T_s1": ok.T_m0_2, "T_t": ok.T_m0_2},
+    chk = run_model({**p, "U": 1e-3, "U_2": 1e-3, "T_m0": ok.T_m0, "T_m0_2": ok.T_m0_2, "T_s1": ok.T_m0_2, "T_t": ok.T_m0_2},
                     O(T_m0_mode="direct", quality="hızlı"))
     assert chk.dip1.s_kur == pytest.approx(0.55e-3, abs=2e-6)
     assert chk.dip2.s_kur == pytest.approx(0.55e-3, abs=2e-6)
     assert chk.w == pytest.approx(1.40e-3, abs=5e-6)
     # 3 mm/s'de film tek başına 0,55 mm'yi aşar
     assert too_fast.T_m0 is None and "U düşürülmeli" in too_fast.note
+
+def test_second_dip_uses_its_own_pull_speed(nominal):
+    a = run_model(nominal, O(quality="hızlı"))
+    b = run_model({**nominal, "U_2": 2 * nominal["U_2"]}, O(quality="hızlı"))
+    assert a.dip1.U == nominal["U"] and b.dip2.U == 2 * nominal["U_2"]
+    assert b.dip1.h0 == pytest.approx(a.dip1.h0)                 # 1. daldırma değişmez
+    assert b.dip2.h0 > a.dip2.h0                                   # 2. tank daha hızlı → daha kalın film

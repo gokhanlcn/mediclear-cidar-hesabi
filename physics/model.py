@@ -33,6 +33,7 @@ class DipResult:
     index: int
     T_m0: float
     t_wait: float
+    U: float                  # bu daldırmadaki çekme hızı
     R_s: float                # plastisolle temas eden yüzey yarıçapı
     s_max: float              # D2 (tam)
     s_max_thin: float | None  # D2 ince katman (yalnız dolu mandrel, 1. daldırma)
@@ -161,7 +162,8 @@ def _dip(index: int, layers: list[gel.Layer], p: dict, T_m0: float, t_wait: floa
 
     eta_b = float(film.viscosity(p["eta_ref"], p["E_a"], p["T_b"], p["T_ref"]))
     try:
-        choice = film.film_thickness(R_s + s_jel, eta_b, p["U"], p["gamma"],
+        U = p["U_2"] if index == 2 else p["U"]
+        choice = film.film_thickness(R_s + s_jel, eta_b, U, p["gamma"],
                                      p["rho_p"], p["g"], p["C_lld"], p["C_fib"], p["C_grav"])
     except ValueError as exc:
         raise ModelError(str(exc)) from exc
@@ -171,7 +173,7 @@ def _dip(index: int, layers: list[gel.Layer], p: dict, T_m0: float, t_wait: floa
     h = film.drained_mean(p["L"], *args)
     h_top, h_bottom = film.drained_profile([0.0, p["L"]], *args)
 
-    return DipResult(index=index, T_m0=T_m0, t_wait=t_wait, R_s=R_s, s_max=s_max,
+    return DipResult(index=index, T_m0=T_m0, t_wait=t_wait, U=U, R_s=R_s, s_max=s_max,
                      s_max_thin=s_thin, s_jel=s_jel, C=C, eta_b=eta_b, film=choice, h0=h0,
                      h_stop=h_stop, h=h, h_top=float(h_top), h_bottom=float(h_bottom),
                      s_toplam=s_jel + h,
