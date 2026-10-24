@@ -128,7 +128,7 @@ simgesine tıkla.
 | Sayfada "… parametrenin kaynağı boş" | Kaynak sütununu doldur ya da sol menüden **Taslak mod**'u aç. |
 | "T_g, T_b'den büyük olmalı" | Jel sıcaklığı banyo sıcaklığından yüksek olmalı; TDS'deki jel sıcaklığını kontrol et. |
 | "T_m0, T_g'den büyük olmalı" | Mandrel jel sıcaklığının altındaysa jel oluşmaz; fırın sıcaklığını veya ön ısıtma süresini artır. |
-| "… için değer girilmemiş" | Tabloda o satır boş; değeri gir ya da 7. Ters tasarım'da bu değişkeni eksen olarak tara. (Proje verileri 24.10.2026 Özet Rapor değerleriyle eksiksiz gelir: t_ön 240 s, U 2, U_2 3,1 mm/s, t_süz 123 s, T_fırın 120 °C, T_g 79 °C, τ_y 10 Pa.) |
+| "… için değer girilmemiş" | Tabloda o satır boş; değeri gir ya da 7. Ters tasarım'da bu değişkeni eksen olarak tara. (Proje verilerinde t_ön 240 s, U 2, U_2 3,1 mm/s, t_süz 123 s 24.10.2026 Özet Rapor'dan girilmiştir.) |
 | Ters tasarım haritası yavaş | Izgara çözünürlüğünü düşür. |
 | Sonuçlar "eski" uyarısı | Girdiler değişti; ilgili sayfada düğmeye tekrar bas. |
 | Program pencereyi kapatınca durdu | Normaldir; siyah pencere programın kendisidir. Tekrar `baslat.bat`. |

@@ -136,14 +136,14 @@ def test_project_table_matches_veriler_md():
     assert v["ID"] == pytest.approx(8e-3) and v["OD"] == pytest.approx(10.8e-3)
     assert v["OD_tol"] == pytest.approx(0.2e-3) and v["p_wire"] == pytest.approx(1.3e-3)
     assert v["rho_m"] == 7990 and v["C_grav"] == 1.0 and v["C_dur"] == 0.3
-    assert v["T_g"] == pytest.approx(352.15) and v["tau_y"] == 10.0
+    assert v["T_g"] == pytest.approx(343.15) and v["tau_y"] == 0.0
     # değeri olan her satırın kaynağı var; değeri olmayanlar boş
     for k, (val, src, _) in PROJECT_DATA.items():
         row = df[df.Kod == k].iloc[0]
         assert (np.isnan(row[VALUE_COL]) if val is None else bool(row.Kaynak))
     assert set(missing_keys()) == {"T_m0"}
     # Özet Rapor değerleri (24.10.2026)
-    assert v["T_oven"] == pytest.approx(393.15) and v["t_pre"] == 240 and v["t_drain"] == 123
+    assert v["T_oven"] == pytest.approx(473.15) and v["t_pre"] == 240 and v["t_drain"] == 123
     assert v["U"] == pytest.approx(2e-3) and v["U_2"] == pytest.approx(3.1e-3)
     assert df[df.Kod == "t_drain"].iloc[0].Kaynak == "Matlab modeli iterasyon çıktısı"
     ps = params.project_settings()
