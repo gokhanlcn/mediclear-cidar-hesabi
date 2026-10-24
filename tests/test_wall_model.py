@@ -113,3 +113,18 @@ def test_design_map_other_axes(nominal):
     dm = inverse.design_map(nominal, O(quality="hızlı"), "t_drain", [10.0, 120.0], "U", [0.5e-3, 2e-3])
     assert dm.w.shape == (2, 2) and np.all(np.isfinite(dm.w))
     assert dm.w[1, 0] > dm.w[0, 0]          # daha hızlı çekme → daha kalın
+
+def test_solve_layers_hits_targets_with_project_data():
+    from physics import params
+    p = {**params.values_si(params.project_table()), "t_drain": 5.0, "t_wait": 9.0, "t_wait_2": 22.0}
+    sols = inverse.solve_layers(p, O(quality="hızlı"), [1e-3, 3e-3], 0.55e-3, 0.55e-3, 573.15)
+    ok, too_fast = sols
+    assert ok.T_m0 is not None and ok.T_m0_2 is not None and not ok.note
+    # bulunan ayarlar gerçekten hedefi verir
+    chk = run_model({**p, "U": 1e-3, "T_m0": ok.T_m0, "T_m0_2": ok.T_m0_2, "T_s1": ok.T_m0_2, "T_t": ok.T_m0_2},
+                    O(T_m0_mode="direct", quality="hızlı"))
+    assert chk.dip1.s_kur == pytest.approx(0.55e-3, abs=2e-6)
+    assert chk.dip2.s_kur == pytest.approx(0.55e-3, abs=2e-6)
+    assert chk.w == pytest.approx(1.40e-3, abs=5e-6)
+    # 3 mm/s'de film tek başına 0,55 mm'yi aşar
+    assert too_fast.T_m0 is None and "U düşürülmeli" in too_fast.note

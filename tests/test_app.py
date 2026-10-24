@@ -65,6 +65,7 @@ def test_inverse_design_page_runs():
     at = _ready_app()
     at.switch_page("sayfalar/p8_ters.py").run()
     assert not at.exception
+    _map_mode(at)
     at.select_slider[0].set_value(11).run()
     next(b for b in at.button if "Haritayı" in b.label).click().run()
     assert not at.exception, at.exception
@@ -76,7 +77,7 @@ def test_inverse_design_page_runs():
 def test_report_page_full_flow():
     at = _ready_app()
     at.switch_page("sayfalar/p8_ters.py").run()
-
+    _map_mode(at)
     at.select_slider[0].set_value(11).run()
     next(b for b in at.button if "Haritayı" in b.label).click().run()
     at.switch_page("sayfalar/p9_numara.py").run()
@@ -123,6 +124,7 @@ def test_weighing_page_second_dip_expected_mass():
 def test_inverse_design_U_vs_drain_axes():
     at = _ready_app()
     at.switch_page("sayfalar/p8_ters.py").run()
+    _map_mode(at)
     sb = [s for s in at.selectbox]
     sb[0].set_value("U").run()                       # dikey eksen
     next(s for s in at.selectbox if s.label == "Yatay eksen").set_value("t_drain").run()
@@ -131,3 +133,21 @@ def test_inverse_design_U_vs_drain_axes():
     assert not at.exception, at.exception
     dm = at.session_state["ters"]["dm"]
     assert (dm.y_key, dm.x_key) == ("U", "t_drain") and dm.w.shape == (11, 11)
+
+def _map_mode(at):
+    next(r for r in at.radio if r.label == "Ne yapmak istiyorsun?").set_value("B. İki değişkenli ayar haritası").run()
+    assert not at.exception, at.exception
+
+
+def test_inverse_layer_targets():
+    at = _ready_app()
+    at.switch_page("sayfalar/p8_ters.py").run()
+    assert not at.exception, at.exception
+    at.select_slider[0].set_value(3).run()                   # U nokta sayısı
+    next(b for b in at.button if "Ayarları bul" in b.label).click().run()
+    assert not at.exception, at.exception
+    sols = at.session_state["ters_A"]["sols"]
+    assert len(sols) == 3
+    # örnek veri setinde (ID 4 / OD 6, tel 0,3) örtüye 0,15 mm kalır; her satır ya çözülür ya da nedenini söyler
+    assert all((s.T_m0 is not None and s.T_m0_2 is not None) or s.note for s in sols)
+    assert any("U düşürülmeli" in s.note for s in sols)

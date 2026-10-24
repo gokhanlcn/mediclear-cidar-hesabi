@@ -26,7 +26,7 @@ PAGES = {
         st.Page("sayfalar/p6_tartim.py", title="6. Tartımla doğrulama (D10)", icon="⚖️", url_path="tartim"),
     ],
     "Analiz": [
-        st.Page("sayfalar/p8_ters.py", title="7. Ters tasarım (ayar haritası)", icon="🗺️",
+        st.Page("sayfalar/p8_ters.py", title="7. Ters tasarım", icon="🗺️",
                 url_path="ters-tasarim"),
     ],
     "Sonuç": [

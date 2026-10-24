@@ -98,10 +98,14 @@ sonuç** biçiminde gösterilir; her grafiğin altında **"Bu grafik ne gösteri
 6. **6. Tartımla doğrulama (D10)** – Modelin deneysel doğrulama yöntemi. Deney verisi yokken beklenen
    kaplama kütlesini (2. daldırmada oluk + örtü) ve terazi hassasiyetini verir; ölçüm girilirse tartımdan
    bulunan kalınlığı modelle karşılaştırır.
-7. **7. Ters tasarım** – İki eksen seç (T_m0, t_bekleme, U, t_süz) ve **Haritayı hesapla**'ya bas. Hedef
-   cidarı veren bölge kırmızı bantla gösterilir. Taranan değişkenlerin tabloda değeri olması gerekmez (ör. t_süz'ü
-   bulmak için U – t_süz haritası). Dikey eksen T_m0 ise tablo gerekli fırın çıkışını ve t_ön'ü de verir.
-8. **8. Numara bazında sonuçlar ve rapor**
+7. **7. Ters tasarım** – Hedef kalınlıktan ayarları bulur. İki araç vardır:
+   - **A. Katman hedefinden ayar bul (önerilen):** İç katman ve örtü hedefini (ör. 0,55 / 0,55 mm) ve bir çekme
+     hızı U aralığı gir, **Ayarları bul**'a bas. Her U için 1. katı hedefe getiren T_m0'ı ve örtüyü hedefe getiren
+     T_m0,2'yi program bulur; jel ve film paylarını, gereken fırın çıkışını ve t_ön'ü gösterir. Film tek başına
+     hedefi aşıyorsa "U düşürülmeli" der.
+   - **B. İki değişkenli ayar haritası:** İki ayar seç (T_m0, t_bekleme, U, t_süz), **Haritayı hesapla**'ya bas.
+     Hedefi veren bölge kırmızı bantla gösterilir; ör. U – t_süz haritası t_süz'ü bulmak için kullanılır.
+   Taranan / çözülen değişkenlerin tabloda değeri olması gerekmez.8. **8. Numara bazında sonuçlar ve rapor**
    - Her ET numarası için bir satır ekle, **Tümünü hesapla**'ya bas.
    - **Excel** ile tüm girdi, kaynak ve sonuçları indir.
    - **Özet raporu hazırla → indir**. HTML dosyasını çift tıklayıp aç; PDF için tarayıcıda

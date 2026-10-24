@@ -94,3 +94,80 @@ def feasible_table(dm: DesignMap) -> pd.DataFrame:
         for lo, hi in feasible_intervals(dm.x, dm.w[i], dm.w_target, dm.w_tol) or [(np.nan, np.nan)]:
             rows.append({"y": yv, "x_min": lo, "x_max": hi})
     return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------------------
+# Katman hedefinden ayar bulma: her U için gereken T_m0 (1. kat) ve T_m0,2 (örtü)
+# ---------------------------------------------------------------------------------------
+
+@dataclass
+class LayerSolution:
+    U: float
+    T_m0: float | None          # 1. katı hedefe getiren T_m0 [K]; None: bulunamadı
+    s_jel1: float | None
+    h1: float | None
+    T_m0_2: float | None        # örtüyü hedefe getiren T_m0,2 [K]
+    s_jel2: float | None
+    h2: float | None
+    w: float | None
+    note: str = ""
+
+
+def _bisect(f, lo: float, hi: float, n: int = 24) -> float:
+    flo = f(lo)
+    for _ in range(n):
+        mid = 0.5 * (lo + hi)
+        fm = f(mid)
+        if (fm > 0) == (flo > 0):
+            lo, flo = mid, fm
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+def solve_layers(p: dict, opt: Options, U_values, s1_target: float, s2_target: float,
+                 T_max: float, link_T2: bool = True,
+                 progress: Callable[[int, int], None] | None = None) -> list[LayerSolution]:
+    """Her U için s_1 = s1_target veren T_m0'ı ve s_2 = s2_target veren T_m0,2'yi bulur (ikiye bölme).
+
+    Kalınlık sıcaklıkla monoton artar: T ≤ T_g'de jel yoktur, kalınlık yalnızca filmdir. Bu yüzden
+    T_g'nin hemen üstünde kalınlık hedeften büyükse hedef o U ile tutturulamaz (film tek başına fazla);
+    T_max'ta hedeften küçükse arama aralığı yetmez. link_T2: T_s1 ve T_t de T_m0,2 ile birlikte değişir.
+    """
+    o1 = replace(opt, spiral=False, T_m0_mode="direct", keep_details=False)   # 1. kat tek başına
+    o2 = replace(opt, T_m0_mode="direct", keep_details=False)
+    T_lo = p["T_g"] + 0.01
+    out = []
+    Us = list(U_values)
+    for i, U in enumerate(Us):
+        q = {**p, "U": U}
+        s1 = lambda T: run_model({**q, "T_m0": T}, o1).dip1.s_kur - s1_target  # noqa: E731
+        sol = LayerSolution(U, None, None, None, None, None, None, None)
+        try:
+            if s1(T_lo) > 0:
+                sol.note = "Film tek başına 1. kat hedefinden kalın → U düşürülmeli"
+            elif s1(T_max) < 0:
+                sol.note = "T_m0 üst sınırda bile 1. kat ince → U artırılmalı ya da T üst sınırı yükseltilmeli"
+            else:
+                T1 = _bisect(s1, T_lo, T_max)
+                r1 = run_model({**q, "T_m0": T1}, o1).dip1
+                sol.T_m0, sol.s_jel1, sol.h1 = T1, r1.s_jel, r1.h
+                q1 = {**q, "T_m0": T1}
+
+                def args(T):
+                    return {**q1, "T_m0_2": T, **({"T_s1": T, "T_t": T} if link_T2 else {})}
+                s2 = lambda T: run_model(args(T), o2).dip2.s_kur - s2_target  # noqa: E731
+                if s2(T_lo) > 0:
+                    sol.note = "Film tek başına örtü hedefinden kalın → U düşürülmeli"
+                elif s2(T_max) < 0:
+                    sol.note = "T_m0,2 üst sınırda bile örtü ince"
+                else:
+                    T2 = _bisect(s2, T_lo, T_max)
+                    r = run_model(args(T2), o2)
+                    sol.T_m0_2, sol.s_jel2, sol.h2, sol.w = T2, r.dip2.s_jel, r.dip2.h, r.w
+        except (ModelError, ValueError) as exc:
+            sol.note = str(exc)
+        out.append(sol)
+        if progress:
+            progress(i + 1, len(Us))
+    return out
