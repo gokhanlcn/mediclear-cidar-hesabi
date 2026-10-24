@@ -98,7 +98,8 @@ def project_table() -> pd.DataFrame:
             continue
         sel = df.Kod == k
         df.loc[sel, VALUE_COL] = np.nan if val is None else float(val)
-        df.loc[sel, "Kaynak"] = f"{DOC}: {src}" if src else ""
+        # Rev. 2 belgesinden gelen değerlerin kaynağı veriler.md değil, Rev. 2'dir
+        df.loc[sel, "Kaynak"] = "" if not src else (src if src.startswith("Rev. 2") else f"{DOC}: {src}")
         df.loc[sel, "Not"] = note
     return df
 
