@@ -33,17 +33,10 @@ def test_parameter_page_example_and_draft():
     assert "hata" in _texts(at)                   # boş tablo
     next(b for b in at.button if "Örnek" in b.label).click().run()
     assert not at.exception
-    assert "Film formülü seçilmemiş" in _texts(at)     # seçim kullanıcıya bırakılır
-    _choose_film(at)
     assert "kaynaksız" in _texts(at)              # örnek değerlerin bir kısmı kaynaksız
     at.sidebar.toggle[0].set_value(True).run()
     assert not at.exception
     assert "hesaba hazır" in _texts(at)
-
-
-def _choose_film(at, model="D7a"):
-    next(r for r in at.radio if r.label == "Kullanılacak film formülü").set_value(model).run()
-    assert not at.exception, at.exception
 
 
 def _ready_app():
@@ -51,7 +44,6 @@ def _ready_app():
     at = _app()
     at.switch_page("sayfalar/p1_parametre.py").run()
     next(b for b in at.button if "Örnek" in b.label).click().run()
-    _choose_film(at)
     at.sidebar.toggle[0].set_value(True).run()
     assert not at.exception
     return at
@@ -127,3 +119,15 @@ def test_weighing_page_second_dip_expected_mass():
     assert not at.exception, at.exception
     titles = " ".join(m.value for m in at.markdown)
     assert "Oluklara dolan plastisol" in titles and "beklenen toplam kütle" in titles
+
+def test_inverse_design_U_vs_drain_axes():
+    at = _ready_app()
+    at.switch_page("sayfalar/p8_ters.py").run()
+    sb = [s for s in at.selectbox]
+    sb[0].set_value("U").run()                       # dikey eksen
+    next(s for s in at.selectbox if s.label == "Yatay eksen").set_value("t_drain").run()
+    at.select_slider[0].set_value(11).run()
+    next(b for b in at.button if "Haritayı" in b.label).click().run()
+    assert not at.exception, at.exception
+    dm = at.session_state["ters"]["dm"]
+    assert (dm.y_key, dm.x_key) == ("U", "t_drain") and dm.w.shape == (11, 11)

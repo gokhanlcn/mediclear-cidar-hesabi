@@ -38,9 +38,13 @@ PROJECT_DATA: dict[str, tuple[float | None, str, str]] = {
                "Ters tasarım başlangıç değeri"),
     "h_oven": (50, "Dolaylı + varsayım: Churchill–Bernstein, D = 8 mm, hava 400 K [26]",
                "Hava hızı 2 m/s varsayıldı (1–5 m/s → 37–83); ışınım dahil değil"),
-    "t_pre": (None, "", "Ters tasarım: T_m0 hedefine ulaşmak için D1'den hesaplanacak (veriler.md)"),
+    "t_pre": (None, "", "Girilecek: fırında kalma süresi. T_m0 = D1 (fırın) + taşıma soğumasından hesaplanır"),
     "T_0": (23, "Tasarım kararı: sıyırma/soğutma sonrası oda sıcaklığı", "T_ref ile aynı"),
-    "T_m0": (None, "", "Ters tasarım: 0,55 mm iç katmanı verecek sıcaklık; 70 °C'nin üzerinde olmalı (veriler.md)"),
+    "t_tr": (12, "Rev. 2 Bölüm 1.2: hat indeksleme süresi 12 s", "Fırından banyoya bir indeksleme adımı kabul edildi"),
+    "T_amb": (23, "Tasarım kararı: oda sıcaklığı (T_0 ile aynı)", ""),
+    "h_amb": (7.5, "Rev. 2 Bölüm 2.2 ve 2.6: doğal taşınım, Churchill–Chu, 4–11 W/(m²·K); nominal 7,5",
+              "Işınım ayrıca eklenmedi"),
+    "T_m0": (None, "", "D1 modunda kullanılmaz (D1 + taşıma soğumasından hesaplanır); doğrudan modda girilir"),
     "T_b": (23, "Tasarım kararı: T_ref ile eşit → η = η_ref [2]; Arrhenius sınırı ≤ 42 °C [14]", ""),
     "t_wait": (5, "Ters tasarım başlangıcı: 5–15 s bekleme ile 0,76–1,5 mm jel [25]", "Hedef 0,55 mm → alt sınır"),
     "U": (None, "", "Ters tasarım: D6–D7 ile film kalınlığından bulunacak; üst sınır servo eksen (veriler.md)"),
@@ -57,9 +61,10 @@ PROJECT_DATA: dict[str, tuple[float | None, str, str]] = {
     "rho_s": (8030, "Doğrudan: 304V tel veri sayfası [30]", ""),
     "c_s": (500, "Doğrudan: 304V, 0–100 °C [30]", ""),
     "k_s": (16.2, "Doğrudan: 304V, 100 °C [30]; 16,36 [31]", ""),
-    "T_m0_2": (None, "", "Ters tasarım; başlangıç: T_m0 (veriler.md). 70 °C'nin üzerinde olmalı"),
-    "T_s1": (None, "", "veriler.md: = T_m0,2 (0,55 mm katmanın zaman sabiti ≈ 3,5 s)"),
-    "T_t": (None, "", "veriler.md: = T_m0,2 (ince tel iç katmanla aynı sıcaklığa gelir)"),
+    "T_m0_2": (98.5, "Rev. 2 Bölüm 4.4 [H]: yay istasyonu çıkışında ortalama mandrel sıcaklığı",
+               "Rev. 2 koşulları: T_m0 = 100 °C, kısmi jel 165 °C, şartlandırma hedefi 100 °C; bunlar değişirse güncellenmeli"),
+    "T_s1": (95.9, "Rev. 2 Bölüm 4.4 [H]: daldırma-2 girişinde iç katman yüzeyi", "Aynı Rev. 2 koşulları"),
+    "T_t": (95.5, "Rev. 2 Bölüm 4.4 [H]: daldırma-2 girişinde tel", "Aynı Rev. 2 koşulları"),
     "t_wait_2": (5, "Ters tasarım başlangıcı: 2. daldırmada 5–30 s [25]", "1. daldırmayla aynı"),
     # --- Model katsayıları ----------------------------------------------------------------
     "C_lld": (0.94, "Teori: Landau–Levich (1942) [34], Derjaguin (1943) [35]; [36], [37]", "Geçerlilik Ca ≲ 10⁻² [37]"),
@@ -69,7 +74,7 @@ PROJECT_DATA: dict[str, tuple[float | None, str, str]] = {
 }
 
 # Mandrel malzemesi ve diğer ayarlar
-SETTINGS = {"mandrel_material": "316L paslanmaz", "T_m0_mode": "direct", "spiral": True,
+SETTINGS = {"mandrel_material": "316L paslanmaz", "T_m0_mode": "D1", "spiral": True,
             "material_type": "Plastisol"}
 
 

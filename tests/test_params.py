@@ -5,7 +5,7 @@ from physics import params
 from physics.params import VALUE_COL, Settings
 from physics.symbols import GROUPS, PARAMS
 
-READY = dict(film_model="D7a")
+READY = dict(T_m0_mode="direct")
 
 
 def _set(df, key, **cols):
@@ -30,10 +30,8 @@ def test_empty_table_blocks_calculation():
     assert v.errors and not v.can_calculate(draft=True)
 
 
-def test_film_model_must_be_chosen():
-    v = params.validate(params.example_table(), Settings())
-    assert any("Film formülü" in i.message for i in v.errors)
-    assert not params.validate(params.example_table(), Settings(**READY)).errors
+def test_no_film_choice_needed():
+    assert not params.validate(params.example_table(), Settings()).errors
 
 
 def test_example_table_sources():
@@ -43,12 +41,6 @@ def test_example_table_sources():
     # kaynağı belli örnekler (model katsayıları) kaynakla gelir, diğerleri YAKLAŞIK
     assert "C_lld" not in v.missing_source
     assert (df.loc[df.Kod == "rho_p", "Not"] == params.APPROX_NOTE).all()
-
-
-def test_unused_coefficients_not_required():
-    df = _set(params.example_table(), "C_fib", val=np.nan)
-    assert not params.validate(df, Settings(film_model="D7a")).errors
-    assert params.validate(df, Settings(film_model="D7b")).errors
 
 
 def test_wire_inputs_only_with_spiral():
@@ -77,13 +69,13 @@ def test_temperature_relations():
 
 def test_d1_requires_solid_mandrel():
     df = _set(params.example_table(), "R_i", val=0.5)
-    v = params.validate(df, Settings(T_m0_mode="D1", **READY))
+    v = params.validate(df, Settings(T_m0_mode="D1"))
     assert any(i.key == "R_i" for i in v.errors)
 
 
 def test_d1_mode_ignores_T_m0_row():
     df = _set(params.example_table(), "T_m0", val=np.nan)
-    assert not params.validate(df, Settings(T_m0_mode="D1", **READY)).errors
+    assert not params.validate(df, Settings(T_m0_mode="D1")).errors
     assert params.validate(df, Settings(**READY)).errors
 
 
@@ -108,7 +100,7 @@ def test_si_conversion():
 
 def test_excel_round_trip():
     df = _set(params.example_table(), "rho_p", Kaynak="Test TDS s.2")
-    s = Settings(T_m0_mode="D1", spiral=False, draft=True, mandrel_material="Alüminyum", film_model="min_ac")
+    s = Settings(T_m0_mode="D1", spiral=False, draft=True, mandrel_material="Alüminyum")
     back, s2, notes = params.load_file(params.to_excel_bytes(df, s), "x.xlsx")
     assert not notes
     assert back.loc[back.Kod == "rho_p", "Kaynak"].iloc[0] == "Test TDS s.2"
@@ -149,34 +141,26 @@ def test_project_table_matches_veriler_md():
     for k, (val, src, _) in PROJECT_DATA.items():
         row = df[df.Kod == k].iloc[0]
         assert (np.isnan(row[VALUE_COL]) if val is None else bool(row.Kaynak))
-    assert set(missing_keys()) == {"t_pre", "T_m0", "U", "t_drain", "T_m0_2", "T_s1", "T_t"}
-    assert params.project_settings().mandrel_material == "316L paslanmaz"
+    assert set(missing_keys()) == {"t_pre", "T_m0", "U", "t_drain"}
+    ps = params.project_settings()
+    assert ps.mandrel_material == "316L paslanmaz" and ps.T_m0_mode == "D1"
+    assert v["T_m0_2"] == pytest.approx(371.65) and v["T_t"] == pytest.approx(368.65)
 
 
 def test_t_pre_not_required_in_direct_mode():
     assert "t_pre" not in params.active_keys(Settings())
-    assert "t_pre" in params.active_keys(Settings(T_m0_mode="D1"))
-
-
-def test_link_second_dip_temperatures():
-    df = _set(params.project_table(), "T_m0", val=100.0)
-    new, changed = params.link_second_dip_temperatures(df)
-    assert set(changed) == {"T_m0_2", "T_s1", "T_t"}
-    for k in ("T_m0_2", "T_s1", "T_t"):
-        assert new.loc[new.Kod == k, VALUE_COL].iloc[0] == 100.0
-    new2, changed2 = params.link_second_dip_temperatures(_set(new, "T_m0_2", val=95.0))
-    assert new2.loc[new2.Kod == "T_t", VALUE_COL].iloc[0] == 95.0 and "T_m0_2" not in changed2
-    _, none = params.link_second_dip_temperatures(params.project_table())
-    assert none == []
+    d1 = params.active_keys(Settings(T_m0_mode="D1"))
+    assert {"t_pre", "t_tr", "T_amb", "h_amb"} <= set(d1)
+    assert not {"t_tr", "T_amb", "h_amb"} & set(params.active_keys(Settings()))
 
 
 def test_project_data_runs_once_open_values_given():
     from physics.model import Options, run_model
     df = params.project_table()
-    for k, val in (("T_m0", 100.0), ("U", 1.0), ("t_drain", 10.0)):
+    for k, val in (("t_pre", 300.0), ("U", 1.0), ("t_drain", 10.0)):
         df = _set(df, k, val=val, Kaynak="test")
-    df, _ = params.link_second_dip_temperatures(df)
-    s = Settings(film_model="D7c")
+    s = params.project_settings()
     assert not params.validate(df, s).errors
-    res = run_model(params.values_si(df), Options(film_model="D7c", quality="hızlı"))
+    res = run_model(params.values_si(df), Options(T_m0_mode="D1", quality="hızlı"))
+    assert res.preheat["T_exit"] > res.T_m0 > 343.15        # taşımada soğur, T_g'nin üstünde kalır
     assert res.dip2 is not None and res.w > 0

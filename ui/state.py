@@ -45,10 +45,17 @@ def values_si() -> dict[str, float]:
     return params.values_si(df())
 
 
-def require_ready() -> Validation:
-    """Hesap sayfalarının başında: veri eksik/hatalıysa sade bir mesajla sayfayı durdurur."""
+def require_ready(optional: set[str] | frozenset = frozenset()) -> Validation:
+    """Hesap sayfalarının başında: veri eksik/hatalıysa sade bir mesajla sayfayı durdurur.
+
+    optional: sayfanın kendisinin sağladığı parametreler (ör. ters tasarımda taranan eksenler);
+    bunlar için "değer girilmemiş" ve "kaynak yok" engel sayılmaz.
+    """
     v = validation()
     s = settings()
+    if optional:
+        v.issues = [i for i in v.issues if not (i.key in optional and "girilmemiş" in i.message)]
+        v.missing_source = [k for k in v.missing_source if k not in optional]
     if v.errors:
         st.error(f"Parametre tablosunda {len(v.errors)} hata var; hesap yapılamıyor. "
                  "**0. Veri girişi** sayfasına dönüp kırmızı (🔴) satırları düzelt.")

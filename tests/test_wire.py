@@ -7,7 +7,6 @@ import pytest
 from physics import wire
 from physics.model import Options, run_model
 
-from conftest import TEST_FILM_MODEL
 
 
 def test_volume_fraction_rev2():
@@ -59,7 +58,7 @@ def test_wire_gel_ring_rev2():
 
 
 def test_model_has_wire_layer(nominal):
-    res = run_model(nominal, Options(film_model=TEST_FILM_MODEL, quality="hızlı"))
+    res = run_model(nominal, Options(quality="hızlı"))
     names = [L.name for L in res.dip2.gel_result.layers]
     assert names == ["mandrel", "iç PVC katmanı", "tel halkası"]
     assert res.wire.phi == pytest.approx(math.pi * nominal["d_wire"] / (4 * nominal["p_wire"]))
@@ -68,7 +67,7 @@ def test_model_has_wire_layer(nominal):
 
 
 def test_hotter_wire_gives_more_second_dip_gel(nominal):
-    opt = Options(film_model=TEST_FILM_MODEL, quality="hızlı")
+    opt = Options(quality="hızlı")
     cold = run_model({**nominal, "T_t": nominal["T_b"]}, opt)
     hot = run_model(nominal, opt)
     assert hot.wire.T_ring > cold.wire.T_ring

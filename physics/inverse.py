@@ -1,7 +1,8 @@
-"""Ters tasarım: T_m0 – t_bekleme düzleminde w haritası ve hedefi tutturan aralıklar. SI.
+"""Ters tasarım: seçilen iki proses değişkeni düzleminde w haritası ve hedefi tutturan aralıklar. SI.
 
-Haritada 1. daldırmanın T_m0 ve t_bekleme değerleri taranır; 2. daldırma girdileri (T_m0,2,
-T_s1, t_bekleme,2 …) tablodaki değerlerinde sabit kalır. T_m0 doğrudan girilmiş kabul edilir.
+Taranabilen değişkenler AXES'te tanımlıdır (1. daldırmanın T_m0'ı, t_bekleme, U, t_süz). Taranmayan
+tüm girdiler tablodaki değerlerinde sabit kalır. T_m0 eksenlerden biriyse T_m0 doğrudan verilmiş kabul
+edilir (D1 modu o harita için kullanılmaz).
 """
 
 from __future__ import annotations
@@ -14,28 +15,42 @@ import pandas as pd
 
 from .model import ModelError, Options, run_model
 
+# kod: (arayüz adı, kullanıcı birimi)
+AXES: dict[str, tuple[str, str]] = {
+    "T_m0": ("T_m0 – 1. daldırmada mandrel sıcaklığı", "°C"),
+    "t_wait": ("t_bekleme – 1. daldırmada bekleme süresi", "s"),
+    "U": ("U – çekme hızı", "mm/s"),
+    "t_drain": ("t_süz – süzülme süresi", "s"),
+}
+
 
 @dataclass
 class DesignMap:
-    T_m0: np.ndarray       # (nT,) [K]
-    t_wait: np.ndarray     # (nt,) [s]
-    w: np.ndarray          # (nT, nt) [m]; hesaplanamayan noktalar NaN
+    x_key: str
+    x: np.ndarray          # (nx,) SI
+    y_key: str
+    y: np.ndarray          # (ny,) SI
+    w: np.ndarray          # (ny, nx) [m]; hesaplanamayan noktalar NaN
     w_target: float
     w_tol: float
 
 
-def design_map(p: dict, opt: Options, T_m0_values, t_wait_values,
+def design_map(p: dict, opt: Options, x_key: str, x_values, y_key: str, y_values,
                progress: Callable[[int, int], None] | None = None) -> DesignMap:
-    T_vals = np.asarray(T_m0_values, dtype=float)
-    t_vals = np.asarray(t_wait_values, dtype=float)
-    W = np.full((T_vals.size, t_vals.size), np.nan)
-    run_opt = replace(opt, T_m0_mode="direct", keep_details=False)
+    if x_key == y_key or x_key not in AXES or y_key not in AXES:
+        raise ValueError("İki farklı eksen seçilmeli.")
+    xs = np.asarray(x_values, dtype=float)
+    ys = np.asarray(y_values, dtype=float)
+    W = np.full((ys.size, xs.size), np.nan)
+    run_opt = replace(opt, keep_details=False)
+    if "T_m0" in (x_key, y_key):
+        run_opt = replace(run_opt, T_m0_mode="direct")
     w_target = w_tol = float("nan")
     total, done = W.size, 0
-    for i, T in enumerate(T_vals):
-        for j, t in enumerate(t_vals):
+    for i, yv in enumerate(ys):
+        for j, xv in enumerate(xs):
             try:
-                res = run_model({**p, "T_m0": T, "t_wait": t}, run_opt)
+                res = run_model({**p, x_key: xv, y_key: yv}, run_opt)
                 W[i, j] = res.w
                 w_target, w_tol = res.w_target, res.w_tol
             except (ModelError, ValueError):
@@ -43,7 +58,7 @@ def design_map(p: dict, opt: Options, T_m0_values, t_wait_values,
             done += 1
             if progress:
                 progress(done, total)
-    return DesignMap(T_vals, t_vals, W, w_target, w_tol)
+    return DesignMap(x_key, xs, y_key, ys, W, w_target, w_tol)
 
 
 def feasible_intervals(t: np.ndarray, w: np.ndarray, target: float, tol: float) -> list[tuple[float, float]]:
@@ -73,9 +88,9 @@ def _cross(t, f, a, b) -> float:
 
 
 def feasible_table(dm: DesignMap) -> pd.DataFrame:
-    """Her T_m0 için hedefi tutturan t_bekleme aralığı (SI)."""
+    """Her y değeri için hedefi tutturan x aralığı (SI). Sütunlar: y, x_min, x_max."""
     rows = []
-    for i, T in enumerate(dm.T_m0):
-        for lo, hi in feasible_intervals(dm.t_wait, dm.w[i], dm.w_target, dm.w_tol) or [(np.nan, np.nan)]:
-            rows.append({"T_m0": T, "t_min": lo, "t_max": hi})
+    for i, yv in enumerate(dm.y):
+        for lo, hi in feasible_intervals(dm.x, dm.w[i], dm.w_target, dm.w_tol) or [(np.nan, np.nan)]:
+            rows.append({"y": yv, "x_min": lo, "x_max": hi})
     return pd.DataFrame(rows)

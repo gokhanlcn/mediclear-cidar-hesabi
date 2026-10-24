@@ -25,7 +25,6 @@ class Options:
     spiral: bool = True
     T_m0_mode: str = "direct"        # "direct" (doğrudan) | "D1" (ön ısıtmadan hesapla)
     quality: str = "normal"          # gel.QUALITY anahtarı
-    film_model: str = ""             # kullanıcının seçtiği film formülü (symbols.FILM_MODELS)
     keep_details: bool = True        # D3 alanını (grafikler için) sakla
 
 
@@ -102,7 +101,10 @@ def run_model(p: dict, opt: Options | None = None) -> ModelResult:
                              "doğrudan gir.")
         pre = preheat.preheat(p["rho_m"], p["c_m"], p["k_m"], R, p["R_i"], p["h_oven"],
                               p["T_oven"], p["T_0"], p["t_pre"])
-        T_m0 = pre["T_m_end"]
+        # fırın çıkışından banyoya taşımada havada soğuma
+        T_m0, tau_t = preheat.transfer_cooling(pre["T_m_end"], p["T_amb"], p["rho_m"], p["c_m"], R,
+                                               p["h_amb"], p["t_tr"])
+        pre.update(T_exit=pre["T_m_end"], T_m0=T_m0, tau_t=tau_t)
         if not pre["biot_ok"]:
             warnings.append(f"Bi = {pre['Bi']:.3f} ≥ 0,1: toplu kütle modeli (D1) geçersiz.")
     else:
@@ -159,7 +161,7 @@ def _dip(index: int, layers: list[gel.Layer], p: dict, T_m0: float, t_wait: floa
 
     eta_b = float(film.viscosity(p["eta_ref"], p["E_a"], p["T_b"], p["T_ref"]))
     try:
-        choice = film.film_thickness(opt.film_model, R_s + s_jel, eta_b, p["U"], p["gamma"],
+        choice = film.film_thickness(R_s + s_jel, eta_b, p["U"], p["gamma"],
                                      p["rho_p"], p["g"], p["C_lld"], p["C_fib"], p["C_grav"])
     except ValueError as exc:
         raise ModelError(str(exc)) from exc

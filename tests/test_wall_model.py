@@ -6,11 +6,10 @@ import pytest
 from physics import inverse, wall
 from physics.model import ModelError, Options, run_model
 
-from conftest import TEST_FILM_MODEL
 
 
 def O(**kw):
-    return Options(film_model=TEST_FILM_MODEL, **kw)
+    return Options(**kw)
 
 
 def test_d9_cure():
@@ -82,14 +81,17 @@ def test_feasible_intervals_monotonic():
 
 
 def test_design_map_small(nominal):
-    dm = inverse.design_map(nominal, O(quality="hızlı"), [403.15, 453.15], [5.0, 20.0])
+    dm = inverse.design_map(nominal, O(quality="hızlı"), "t_wait", [5.0, 20.0], "T_m0", [403.15, 453.15])
     assert dm.w.shape == (2, 2) and np.all(np.isfinite(dm.w))
     assert dm.w[1, 1] > dm.w[0, 0]        # daha sıcak ve uzun → daha kalın
 
 
-def test_model_requires_film_choice(nominal):
-    with pytest.raises(ModelError):
-        run_model(nominal, Options(quality="hızlı"))
+def test_d1_mode_applies_transfer_cooling(nominal):
+    res = run_model(nominal, O(T_m0_mode="D1", quality="hızlı"))
+    pre = res.preheat
+    assert pre["T_exit"] > res.T_m0 > nominal["T_amb"]
+    expect = nominal["T_amb"] + (pre["T_exit"] - nominal["T_amb"]) * math.exp(-nominal["t_tr"] / pre["tau_t"])
+    assert res.T_m0 == pytest.approx(expect)
 
 
 def test_second_dip_uses_table_inputs(nominal):
@@ -100,5 +102,14 @@ def test_second_dip_uses_table_inputs(nominal):
 
 def test_film_coefficients_flow_into_model(nominal):
     a = run_model(nominal, O(quality="hızlı"))
-    b = run_model({**nominal, "C_lld": 2 * nominal["C_lld"]}, O(quality="hızlı"))
-    assert b.dip1.h0 == pytest.approx(2 * a.dip1.h0)
+    assert a.dip1.film.formula == "D7a"                       # örnek değerlerde LLD dalı küçük
+    b = run_model({**nominal, "C_lld": 0.5 * nominal["C_lld"]}, O(quality="hızlı"))
+    assert b.dip1.h0 == pytest.approx(0.5 * a.dip1.h0)
+    c = run_model({**nominal, "C_lld": 3 * nominal["C_lld"]}, O(quality="hızlı"))
+    assert c.dip1.film.formula == "D7c" and c.dip1.h0 == pytest.approx(c.dip1.film.values["D7c"])
+
+
+def test_design_map_other_axes(nominal):
+    dm = inverse.design_map(nominal, O(quality="hızlı"), "t_drain", [10.0, 120.0], "U", [0.5e-3, 2e-3])
+    assert dm.w.shape == (2, 2) and np.all(np.isfinite(dm.w))
+    assert dm.w[1, 0] > dm.w[0, 0]          # daha hızlı çekme → daha kalın

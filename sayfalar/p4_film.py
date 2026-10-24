@@ -61,10 +61,12 @@ step("Kapiler uzunluk",
 step("Yarıçap oranı",
      r"\frac{R}{\ell_c}", rf"\frac{{{L(mm(R_film))}}}{{{L(mm(fc.l_c))}}}", L(R_film / fc.l_c, 3),
      "R: filmin sürüklendiği yüzeyin (jel yüzeyi) yarıçapı.")
-crit = film.md_criteria(R_film, fc.Ca, fc.l_c)
-st.markdown("**.md D6 koşulları** (bilgi amaçlı; \"≫\" ve \"≲\" için sayısal sınır tanımlı değildir, formülü "
-            "kullanıcı seçer):\n\n" + "\n".join(f"- **{k}**: {cond} → bu değerlerle {vals}" for k, cond, vals in crit))
-st.success(f"**Kullanılan formül (0. Veri girişinde seçildi): {film.FORMULA_NAMES[fc.formula]}**")
+if fc.geometry == "levha":
+    step("Levha dallarının kesiştiği kapiler sayı",
+         r"C_{LLD}\,Ca^{*\,2/3} = C_{grav}\,Ca^{*\,1/2} \;\Rightarrow\; Ca^{*} = \left(\frac{C_{grav}}{C_{LLD}}\right)^{6}",
+         rf"\left(\frac{{{L(p['C_grav'])}}}{{{L(p['C_lld'])}}}\right)^{{6}}", L(fc.Ca_cross),
+         "Ca < Ca* ise D7a (LLD) dalı, Ca > Ca* ise D7c (yerçekimi) dalı daha küçüktür.")
+st.success(f"**Otomatik seçim:** {fc.reason}")
 
 # --- D7 -------------------------------------------------------------------------------
 st.header("D7 – Sürüklenen film kalınlığı")
@@ -80,18 +82,17 @@ D7 = {
             r"h = C_{grav}\,\sqrt{\frac{\eta\, U}{\rho_p\, g}}",
             rf"{L(p['C_grav'])} \cdot \sqrt{{\frac{{{L(eta)} \cdot {L(U_)}}}{{{L(rg)}}}}}\;\text{{m}}"),
 }
-used = ["D7a", "D7c"] if fc.formula == "min_ac" else [fc.formula]
+used = ["D7a", "D7c"] if fc.geometry == "levha" else ["D7b"]
 for k in used:
     title, form, sub = D7[k]
-    step(f"{title} (seçilen formül)" if fc.formula != "min_ac" else title, form, sub,
-         rf"{L(mm(fc.values[k]))}\;\text{{mm}}")
-if fc.formula == "min_ac":
-    step("Kullanılan film kalınlığı (Rev. 2 yaklaşımı)",
+    step(title, form, sub, rf"{L(mm(fc.values[k]))}\;\text{{mm}}")
+if fc.geometry == "levha":
+    step("Kullanılan film kalınlığı (levha: iki dalın küçüğü)",
          r"h_0 = \min(h_{D7a},\, h_{D7c})",
          rf"\min({L(mm(fc.values['D7a']))},\; {L(mm(fc.values['D7c']))})\;\text{{mm}}",
-         rf"{L(mm(fc.h0))}\;\text{{mm}}")
+         rf"{L(mm(fc.h0))}\;\text{{mm}}", f"Belirleyici dal: {fc.formula}.")
 others = [k for k in ("D7a", "D7b", "D7c") if k not in used]
-st.caption("Karşılaştırma (seçilmeyen formüller, aynı girdilerle): "
+st.caption("Karşılaştırma (bu geometride kullanılmayan formül): "
            + ", ".join(f"{k} = {num(mm(fc.values[k]), 3)} mm" for k in others)
            + ". Katsayılar 0. Veri girişi → Model katsayıları sekmesindedir.")
 U_now = p["U"]
@@ -101,7 +102,8 @@ styles = {"D7a": COLORS["line"], "D7b": COLORS["ok"], "D7c": COLORS["accent"]}
 fig = go.Figure()
 for k, color in styles.items():
     fig.add_scatter(x=U * 1e3, y=mm(vals[k]), name=k, line=dict(color=color, width=1.5, dash="dot"))
-fig.add_scatter(x=U * 1e3, y=mm(vals[fc.formula]), name=f"Seçilen: {film.FORMULA_NAMES[fc.formula].split(' (')[0]}",
+fig.add_scatter(x=U * 1e3, y=mm(vals["min_ac" if fc.geometry == "levha" else "D7b"]),
+                name="Otomatik seçim (levha: min(D7a, D7c); fiber: D7b)",
                 line=dict(color="black", width=4))
 fig.add_scatter(x=[U_now * 1e3], y=[mm(fc.h0)], mode="markers", name="Seçilen U",
                 marker=dict(size=14, color="black", symbol="star"))
@@ -109,8 +111,9 @@ fig.update_layout(title="Film kalınlığı – çekme hızı", xaxis_title="Çe
                   yaxis_title="Film kalınlığı h_0 [mm]", xaxis_type="log", yaxis_type="log",
                   xaxis_dtick="D2", yaxis_dtick="D2")
 show_fig(fig, f"D7_h_U_daldirma{dip.index}")
-explain("Noktalı çizgiler üç formülün verdiği film kalınlığını, siyah kalın çizgi 0. Veri girişinde seçilen "
-        "formülü gösterir. Yıldız tablodaki çekme hızıdır: daha hızlı çekmek daha kalın film demektir.")
+explain("Noktalı çizgiler üç formülün verdiği film kalınlığını, siyah kalın çizgi programın otomatik seçtiği "
+        "sonucu gösterir: levhada iki dalın küçüğü (kırılma noktası Ca*), fiberde D7b. Yıldız tablodaki çekme "
+        "hızıdır: daha hızlı çekmek daha kalın film demektir.")
 # --- D8 -------------------------------------------------------------------------------
 st.header("D8 – Süzülme ve akma gerilmesi")
 L_dip = p["L"]
@@ -157,7 +160,7 @@ explain("Çekmeden sonra sıvı film yerçekimiyle aşağı akar; bu yüzden man
 
 assumptions([
     "D7 formülleri Newtonyen sıvı içindir; akma gerilmesi yalnızca D8'de hesaba katıldı.",
-    "Film formülü ve katsayıları kullanıcı tarafından seçilir/girilir (0. Veri girişi → Model katsayıları).",
+    "Film formülü otomatik seçilir (levha: min(D7a, D7c), fiber: D7b); katsayılar 0. Veri girişindedir.",
     "Film, jel katmanının dış yüzeyine sürüklenir (yarıçap R_s + s_jel).",
     "Süzülme çekme bittikten sonra başlar; çekme sırasındaki süzülme ve kürde akma ihmal edildi.",
     "Toplam kalınlıkta filmin daldırma boyu L boyunca ortalaması kullanılır.",

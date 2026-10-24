@@ -32,7 +32,11 @@ has_tpre = "t_pre" in p      # T_m0 doğrudan girildiğinde t_ön isteğe bağl�
 res = preheat.preheat(p["rho_m"], p["c_m"], p["k_m"], R, p["R_i"], p["h_oven"], p["T_oven"],
                       p["T_0"], p.get("t_pre", 0.0))
 tau, Bi = res["tau"], res["Bi"]
-target = res["T_m_end"] if s.T_m0_mode == "D1" else p["T_m0"]
+if s.T_m0_mode == "D1":
+    # fırın çıkışı → taşıma sırasında havada soğuma → banyoya giriş (T_m0)
+    target, tau_t = preheat.transfer_cooling(res["T_m_end"], p["T_amb"], p["rho_m"], p["c_m"], R, p["h_amb"], p["t_tr"])
+else:
+    target = p["T_m0"]
 t_reach = preheat.time_to_reach(target, p["T_oven"], p["T_0"], tau)
 
 Tf, T0 = C(p["T_oven"]), C(p["T_0"])
@@ -50,10 +54,21 @@ if has_tpre:
          r"T_m(t) = T_{\text{fırın}} - (T_{\text{fırın}} - T_0)\, e^{-t/\tau}",
          rf"{L(Tf)} - ({L(Tf)} - {L(T0)}) \cdot e^{{-{L(p['t_pre'])}/{L(tau)}}}",
          rf"{L(C(res['T_m_end']))}\;°\text{{C}}",
-         "D1 modunda bu değer 1. daldırmanın T_m0'ıdır." if s.T_m0_mode == "D1" else None)
+         "Fırın çıkış sıcaklığı T_çıkış." if s.T_m0_mode == "D1" else None)
+    if s.T_m0_mode == "D1":
+        Ta = C(p["T_amb"])
+        step("Taşıma sırasında zaman sabiti (ortam havası)",
+             r"\tau_t = \frac{\rho_m\, c_m\, R}{2\, h_{\text{ortam}}}",
+             rf"\frac{{{L(p['rho_m'])} \cdot {L(p['c_m'])} \cdot {L(R)}}}{{2 \cdot {L(p['h_amb'])}}}",
+             rf"{L(tau_t)}\;\text{{s}}")
+        step(f"Banyoya girişte mandrel sıcaklığı (t_taşıma = {num(p['t_tr'], 0)} s)",
+             r"T_{m0} = T_{\text{ortam}} + (T_{\text{çıkış}} - T_{\text{ortam}})\, e^{-t_{\text{taşıma}}/\tau_t}",
+             rf"{L(Ta)} + ({L(C(res['T_m_end']))} - {L(Ta)}) \cdot e^{{-{L(p['t_tr'])}/{L(tau_t)}}}",
+             rf"{L(C(target))}\;°\text{{C}}",
+             f"Taşımada kayıp: {num(C(res['T_m_end']) - C(target), 2)} °C. Bu değer 1. daldırmanın T_m0'ıdır.")
 else:
     st.caption("t_ön girilmedi: gerekli ön ısıtma süresi aşağıda T_m0'dan hesaplanır.")
-if math.isfinite(t_reach):
+if math.isfinite(t_reach) and s.T_m0_mode == "direct":
     step(f"T_m0 = {num(C(target), 1)} °C'ye ulaşma süresi",
          r"t = \tau\, \ln\frac{T_{\text{fırın}} - T_0}{T_{\text{fırın}} - T_{m0}}",
          rf"{L(tau)} \cdot \ln\frac{{{L(Tf)} - {L(T0)}}}{{{L(Tf)} - {L(C(target))}}}",

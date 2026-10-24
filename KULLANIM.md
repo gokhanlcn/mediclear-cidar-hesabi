@@ -73,17 +73,20 @@ sonuç** biçiminde gösterilir; her grafiğin altında **"Bu grafik ne gösteri
    - Sekmeler: Plastisol · Mandrel · Proses · Ürün · **Tel / 2. daldırma** (d, hatve p, tel malzemesi,
      2. daldırmada mandrel / iç katman / tel sıcaklıkları, bekleme süresi) · **Model katsayıları**
      (C_LLD, C_fib, C_grav, C_dur).
-   - **Film formülü seçimi** (Model katsayıları sekmesi): D7a / D7b / D7c / "D7a ile D7c'nin küçüğü".
-     Program seçim yapmaz; Ca, ℓ_c, R/ℓ_c ve .md'deki koşullar seçimine yardımcı olmak için gösterilir.
+   - **Film formülü otomatik seçilir:** R > ℓ_c (levha) ise h = min(D7a, D7c), değilse D7b. Sayısal eşik
+     yoktur; iki dal Ca* = (C_grav/C_LLD)⁶ noktasında kendiliğinden kesişir (Model katsayıları sekmesinde açıklanır).
    - Satır renkleri: 🟢 tamam · 🟡 kaynak yok · 🔴 hata (mesaj ne yapacağını söyler).
    - Kaynak sütunu boşken hesap yapılmaz (.md kuralı). Denemek için sol menüden **Taslak mod**'u aç.
-   - **Hesap ayarları**: T_m0 doğrudan mı girilecek yoksa fırından (D1) mı hesaplanacak, spiral var mı,
-     mandrel malzemesi, plastisol / organosol.
+   - **Hesap ayarları**: T_m0 doğrudan mı girilecek yoksa **D1 (fırın) + taşıma soğumasından** mı hesaplanacak
+     (fırın çıkışı → t_taşıma süresince havada soğuma), spiral var mı, mandrel malzemesi, plastisol / organosol.
+   - Program açılışta **MediClear proje verileriyle** (veriler.md) başlar; **📄 MediClear proje verilerini yükle**
+     ile istediğin zaman geri dönebilirsin.
    - **E_a yardımcısı** (Plastisol sekmesi): TDS'deki viskozite–sıcaklık eğrisinden en az iki nokta gir;
      E_a hesaplanır ve tabloya yazılır.
    - **Excel olarak kaydet** ile veri setini sakla; sonra **yükle** ile geri getir (eski dosyalar da yüklenir;
      film formülünü yeniden seçmen gerekir).
-1. **1. Mandrel ön ısıtma (D1)** – τ, Biot sayısı, t_ön sonundaki sıcaklık ve hedefe ulaşma süresi.
+1. **1. Mandrel ön ısıtma (D1)** – τ, Biot sayısı, t_ön sonundaki fırın çıkış sıcaklığı ve taşımada havada
+   soğuma sonrası banyoya giriş sıcaklığı T_m0 (doğrudan modda: hedef T_m0'a ulaşma süresi).
 2. **2. Jel katmanı (D2–D4)** – Enerji tavanı, ısı iletimi çözümü (yöntem ve ağ bilgisiyle), jel
    kalınlığının zamanla artışı, radyal sıcaklık profili ve sıcaklık haritası. 1. / 2. daldırma seçilebilir.
 3. **3. Sürüklenen film (D5–D8)** – Banyo sıcaklığındaki viskozite, Ca ve ℓ_c, seçilen film formülü,
@@ -95,8 +98,9 @@ sonuç** biçiminde gösterilir; her grafiğin altında **"Bu grafik ne gösteri
 6. **6. Tartımla doğrulama (D10)** – Modelin deneysel doğrulama yöntemi. Deney verisi yokken beklenen
    kaplama kütlesini (2. daldırmada oluk + örtü) ve terazi hassasiyetini verir; ölçüm girilirse tartımdan
    bulunan kalınlığı modelle karşılaştırır.
-7. **7. Ters tasarım** – **Haritayı hesapla**'ya bas. Hedef cidarı veren 1. daldırma mandrel sıcaklığı ve
-   bekleme süresi bölgesi kırmızı bantla gösterilir; altındaki tablo fırın ve çevrim süresi tasarımı içindir.
+7. **7. Ters tasarım** – İki eksen seç (T_m0, t_bekleme, U, t_süz) ve **Haritayı hesapla**'ya bas. Hedef
+   cidarı veren bölge kırmızı bantla gösterilir. Taranan değişkenlerin tabloda değeri olması gerekmez (ör. t_süz'ü
+   bulmak için U – t_süz haritası). Dikey eksen T_m0 ise tablo gerekli fırın çıkışını ve t_ön'ü de verir.
 8. **8. Numara bazında sonuçlar ve rapor**
    - Her ET numarası için bir satır ekle, **Tümünü hesapla**'ya bas.
    - **Excel** ile tüm girdi, kaynak ve sonuçları indir.
@@ -119,7 +123,7 @@ simgesine tıkla.
 | Sayfada "… parametrenin kaynağı boş" | Kaynak sütununu doldur ya da sol menüden **Taslak mod**'u aç. |
 | "T_g, T_b'den büyük olmalı" | Jel sıcaklığı banyo sıcaklığından yüksek olmalı; TDS'deki jel sıcaklığını kontrol et. |
 | "T_m0, T_g'den büyük olmalı" | Mandrel jel sıcaklığının altındaysa jel oluşmaz; fırın sıcaklığını veya ön ısıtma süresini artır. |
-| "Film formülü seçilmemiş" | 0. Veri girişi → Model katsayıları sekmesinde kullanılacak film formülünü seç. |
+| "… için değer girilmemiş" (t_ön, U, t_süz) | Proje verilerinde ters tasarımla belirlenecek olarak boştur; değeri gir ya da 7. Ters tasarım'da bu değişkeni eksen olarak tara. |
 | Ters tasarım haritası yavaş | Izgara çözünürlüğünü düşür. |
 | Sonuçlar "eski" uyarısı | Girdiler değişti; ilgili sayfada düğmeye tekrar bas. |
 | Program pencereyi kapatınca durdu | Normaldir; siyah pencere programın kendisidir. Tekrar `baslat.bat`. |

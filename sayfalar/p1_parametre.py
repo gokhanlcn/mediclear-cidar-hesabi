@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from physics import film, params
-from physics.symbols import FILM_MODELS, GROUPS, MATERIALS, PARAMS
+from physics.symbols import GROUPS, MATERIALS, PARAMS
 from physics.units import from_si, to_si
 from ui import state
 from ui.common import COLORS, explain, num, show_fig
@@ -43,10 +43,10 @@ with st.expander("⚙️ Hesap ayarları", expanded=True):
     a1, a2 = st.columns(2)
     mode = a1.radio(
         "1. daldırmada mandrel sıcaklığı (T_m0)",
-        ["Doğrudan gir", "D1'den hesapla (ön ısıtma fırını)"],
+        ["Doğrudan gir", "D1 (fırın) + taşıma soğumasından hesapla"],
         index=0 if s.T_m0_mode == "direct" else 1,
-        help="D1'den hesaplanırsa T_m0 = fırında t_ön süre sonra ulaşılan sıcaklık. "
-             "D1 yalnızca dolu mandrel (R_i = 0) için geçerlidir.")
+        help="Hesaplanırsa: fırında t_ön sürede ulaşılan çıkış sıcaklığı (D1), ardından fırından banyoya "
+             "t_taşıma süresince havada soğuma. D1 yalnızca dolu mandrel (R_i = 0) için geçerlidir.")
     s.T_m0_mode = "direct" if mode == "Doğrudan gir" else "D1"
     s.material_type = a2.radio("Malzeme tipi", ["Plastisol", "Organosol"],
                                index=0 if s.material_type == "Plastisol" else 1,
@@ -151,12 +151,18 @@ def _ea_helper() -> None:
 
 
 def _film_model_panel() -> None:
-    st.markdown("#### Film formülü seçimi")
-    st.markdown("Program hangi film formülünün geçerli olduğuna **kendisi karar vermez**. Aşağıdaki "
-                "boyutsuz sayılar ve .md'deki koşullar seçimine yardımcı olur.")
-    st.latex(r"Ca = \frac{\eta U}{\gamma}, \qquad \ell_c = \sqrt{\frac{\gamma}{\rho_p g}}")
+    st.markdown("#### Film formülü (otomatik)")
+    st.markdown("Program film formülünü kendisi seçer; sayısal eşik kullanılmaz:\n\n"
+                "- **R > ℓ_c (levha):** h = min(D7a, D7c) = ℓ_c·min(C_LLD·Ca^(2/3), C_grav·Ca^(1/2)). Düşük "
+                "Ca'da LLD dalı, yüksek Ca'da yerçekimi dalı kendiliğinden küçük kalır (Rev. 2 Bölüm 2.4; "
+                "Rio & Boulogne 2017).\n"
+                "- **R ≤ ℓ_c (fiber, ince mandrel):** h = D7b.\n\n"
+                "Hesapta R, filmin sürüklendiği jel yüzeyinin yarıçapıdır; sonuç **3. Sürüklenen film** "
+                "sayfasında adım adım gösterilir.")
+    st.latex(r"Ca = \frac{\eta U}{\gamma}, \qquad \ell_c = \sqrt{\frac{\gamma}{\rho_p g}}, \qquad "
+             r"Ca^{*} = \left(\frac{C_{grav}}{C_{LLD}}\right)^{6}")
     vals = state.values_si()
-    need = ["eta_ref", "E_a", "T_b", "T_ref", "U", "gamma", "rho_p", "g", "ID"]
+    need = ["eta_ref", "E_a", "T_b", "T_ref", "U", "gamma", "rho_p", "g", "ID", "C_lld", "C_grav"]
     if all(k in vals for k in need):
         eta = float(film.viscosity(vals["eta_ref"], vals["E_a"], vals["T_b"], vals["T_ref"]))
         R = vals["ID"] / 2
@@ -164,27 +170,17 @@ def _film_model_panel() -> None:
         lc = film.capillary_length(vals["gamma"], vals["rho_p"], vals["g"])
         c1, c2 = st.columns(2)
         c3, c4 = st.columns(2)
-        c1.metric("η(T_b)", f"{num(eta, 3)} Pa·s")
-        c2.metric("Ca", num(Ca, 4))
+        c1.metric("Ca", num(Ca, 4))
+        c2.metric("Ca* (dalların kesişimi)", num(film.crossover_capillary(vals["C_lld"], vals["C_grav"]), 3))
         c3.metric("ℓ_c", f"{num(lc * 1e3, 3)} mm")
         c4.metric("R / ℓ_c (mandrel)", num(R / lc, 2),
                   help="R = ID/2. Film jel yüzeyine sürüklendiği için hesapta yarıçap biraz daha büyüktür.")
-        st.markdown("**.md D6 koşulları** (\"≫\" ve \"≲\" için sayısal sınır tanımlı değildir; "
-                    "değerlendirme sana aittir):\n\n" + "\n".join(
-                        f"- **{k}**: {cond} → bu değerlerle {vals}" for k, cond, vals in film.md_criteria(R, Ca, lc)))
     else:
-        st.caption("Ca ve ℓ_c'yi görmek için η_ref, E_a, T_b, T_ref, U, γ, ρ_p ve ID değerlerini gir.")
-    opts = [""] + list(FILM_MODELS)
-    choice = st.radio("Kullanılacak film formülü", opts, index=opts.index(s.film_model) if s.film_model in opts else 0,
-                      format_func=lambda k: "— seçilmedi —" if k == "" else FILM_MODELS[k],
-                      help="Seçilen formül her iki daldırmada da kullanılır. Formüllerin katsayıları "
-                           "aşağıdaki tabloda girilir.")
-    s.film_model = choice
+        st.caption("Ca ve ℓ_c'yi görmek için η_ref, E_a, T_b, T_ref, U, γ, ρ_p, ID ve katsayıları gir.")
     st.latex(r"\text{D7a: } h = C_{LLD}\,\frac{(\eta U)^{2/3}}{\gamma^{1/6}(\rho_p g)^{1/2}} \qquad "
              r"\text{D7b: } h = C_{fib}\,R\,Ca^{2/3}")
     st.latex(r"\text{D7c: } h = C_{grav}\sqrt{\frac{\eta U}{\rho_p g}} \qquad "
              r"\text{D8: } h_{dur} = C_{dur}\,\frac{\tau_y}{\rho_p g}")
-
 
 tabs = st.tabs(list(GROUPS))
 for tab, group in zip(tabs, GROUPS):
@@ -196,15 +192,6 @@ for tab, group in zip(tabs, GROUPS):
                         "2. daldırmada plastisolle temas eden yüzey telin tepesidir (R + s_1 + d_tel). "
                         "Aşağıdaki sıcaklıklar mandrelin, iç katmanın ve telin **2. daldırmaya girerken** "
                         "sahip olduğu sıcaklıklardır.")
-            if st.button("🔗 T_s1 ve T_t'yi T_m0,2'ye eşitle (veriler.md kuralı)",
-                         help="veriler.md: T_s1 = T_t = T_m0,2 (ince katman ve tel mandrel sıcaklığına hızla gelir). "
-                              "T_m0,2 boşsa başlangıç değeri olarak T_m0 alınır."):
-                new_df, changed = params.link_second_dip_temperatures(state.df())
-                if changed:
-                    state.set_df(new_df)
-                    st.rerun()
-                else:
-                    st.warning("Önce T_m0 (Proses sekmesi) veya T_m0,2 değerini gir.")
         if group == "Model katsayıları":
             _film_model_panel()
             st.markdown("#### Katsayılar")

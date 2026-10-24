@@ -1,9 +1,8 @@
 """D5–D8 – Viskozite, boyutsuz sayılar, sürüklenen film ve süzülme. Tüm girdiler SI.
 
-Formüllerin sayısal katsayıları (C_LLD, C_fib, C_grav, C_dur) ve hangi film formülünün
-kullanılacağı kullanıcı girdisidir; bu modül seçim yapmaz ve gizli katsayı içermez.
-.md D6'daki koşullar (R ≫ ℓ_c ve Ca < 0,1 → D7a; R ≲ ℓ_c → D7b; Ca ≫ 1 → D7c) yalnızca
-kullanıcıya bilgi olarak gösterilir.
+Formüllerin sayısal katsayıları (C_LLD, C_fib, C_grav, C_dur) kullanıcı girdisidir; gizli katsayı yoktur.
+Film formülü otomatik seçilir (film_thickness): levhada min(D7a, D7c), fiberde D7b. Sayısal eşik
+tanımlanmaz; levha/fiber ayrımı R ile ℓ_c'nin karşılaştırmasıdır.
 """
 
 from __future__ import annotations
@@ -82,35 +81,45 @@ def all_formulas(R, eta, U, gamma, rho_p, g, C_lld, C_fib, C_grav) -> dict[str, 
 
 @dataclass
 class FilmResult:
-    formula: str                 # kullanıcının seçtiği formül
+    formula: str                 # hesapta kullanılan dal: "D7a", "D7c" (levha) veya "D7b" (fiber)
     h0: float                    # çekme anındaki film kalınlığı [m]
     Ca: float
     l_c: float
     R: float                     # filmin sürüklendiği yüzeyin yarıçapı [m]
+    geometry: str = ""           # "levha" (R > ℓ_c) veya "fiber" (R ≤ ℓ_c)
+    Ca_cross: float = float("nan")   # levhada D7a ve D7c dallarının kesiştiği kapiler sayı
+    reason: str = ""
     values: dict[str, float] = field(default_factory=dict)   # tüm formüllerin sonucu (karşılaştırma)
 
 
-def film_thickness(model: str, R: float, eta: float, U: float, gamma: float, rho_p: float, g: float,
+def crossover_capillary(C_lld: float, C_grav: float) -> float:
+    """Levha dallarının kesişimi: C_LLD·Ca^(2/3) = C_grav·Ca^(1/2) → Ca* = (C_grav/C_LLD)^6."""
+    return (C_grav / C_lld) ** 6
+
+
+def film_thickness(R: float, eta: float, U: float, gamma: float, rho_p: float, g: float,
                    C_lld: float, C_fib: float, C_grav: float) -> FilmResult:
-    if model not in FORMULA_NAMES:
-        raise ValueError("Film formülü seçilmemiş. 0. Veri girişi → Model katsayıları sekmesinden seç.")
-    vals = {k: float(v) for k, v in all_formulas(R, eta, U, gamma, rho_p, g, C_lld, C_fib, C_grav).items()}
-    return FilmResult(formula=model, h0=vals[model], Ca=capillary_number(eta, U, gamma),
-                      l_c=capillary_length(gamma, rho_p, g), R=R, values=vals)
+    """D7 – otomatik seçim (eşik tanımlanmaz):
 
-
-def md_criteria(R: float, Ca: float, l_c: float) -> list[tuple[str, str, str]]:
-    """.md D6 koşulları ve bu değerlerle ilgili sayılar: (formül, koşul, değer metni).
-
-    "≫" ve "≲" için sayısal eşik tanımlanmamıştır; değerlendirme kullanıcıya bırakılır.
+    * R > ℓ_c (levha): h = ℓ_c·min(C_LLD·Ca^(2/3), C_grav·Ca^(1/2)) = min(D7a, D7c)
+      (Rev. 2 Bölüm 2.4; Rio & Boulogne 2017). Düşük Ca'da LLD dalı, yüksek Ca'da yerçekimi dalı
+      kendiliğinden küçük kalır; geçiş Ca* = (C_grav/C_LLD)^6'da olur.
+    * R ≤ ℓ_c (fiber): h = C_fib·R·Ca^(2/3) (D7b).
     """
-    ratio, ca = f"{R / l_c:.3g}".replace(".", ","), f"{Ca:.3g}".replace(".", ",")
-    return [
-        ("D7a", "R ≫ ℓ_c ve Ca < 0,1", f"R/ℓ_c = {ratio}, Ca = {ca}"),
-        ("D7b", "R ≲ ℓ_c", f"R/ℓ_c = {ratio}"),
-        ("D7c", "Ca ≫ 1", f"Ca = {ca}"),
-    ]
-
+    vals = {k: float(v) for k, v in all_formulas(R, eta, U, gamma, rho_p, g, C_lld, C_fib, C_grav).items()}
+    Ca, l_c = capillary_number(eta, U, gamma), capillary_length(gamma, rho_p, g)
+    Ca_x = crossover_capillary(C_lld, C_grav)
+    r = f"{R / l_c:.3g}".replace(".", ",")
+    if R > l_c:
+        branch = "D7a" if vals["D7a"] <= vals["D7c"] else "D7c"
+        ca, cax = (f"{x:.3g}".replace(".", ",") for x in (Ca, Ca_x))
+        reason = (f"R/ℓ_c = {r} > 1 → levha. h = min(D7a, D7c); Ca = {ca} "
+                  f"{'<' if Ca < Ca_x else '≥'} Ca* = {cax} olduğu için {branch} dalı daha küçük.")
+        return FilmResult(formula=branch, h0=vals["min_ac"], Ca=Ca, l_c=l_c, R=R, geometry="levha",
+                          Ca_cross=Ca_x, reason=reason, values=vals)
+    reason = f"R/ℓ_c = {r} ≤ 1 → fiber (ince mandrel). h = D7b."
+    return FilmResult(formula="D7b", h0=vals["D7b"], Ca=Ca, l_c=l_c, R=R, geometry="fiber",
+                      Ca_cross=Ca_x, reason=reason, values=vals)
 
 # --- D8 --------------------------------------------------------------------------------
 

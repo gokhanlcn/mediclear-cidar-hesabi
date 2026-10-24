@@ -47,6 +47,18 @@ def time_to_reach(T_target: float, T_oven: float, T_0: float, tau: float) -> flo
     return -tau * math.log((T_oven - T_target) / (T_oven - T_0))
 
 
+def transfer_cooling(T_exit: float, T_amb: float, rho_m: float, c_m: float, R: float, h_amb: float,
+                     t_tr: float) -> tuple[float, float]:
+    """Fırından banyoya taşımada havada soğuma (aynı toplu kütle modeli, ortam havası):
+
+        T_m0 = T_ortam + (T_çıkış − T_ortam)·exp(−t_taşıma/τ_t),   τ_t = ρ_m c_m R / (2 h_ortam)
+
+    Döner: (T_m0, τ_t).
+    """
+    tau_t = time_constant(rho_m, c_m, R, h_amb)
+    return float(T_amb + (T_exit - T_amb) * math.exp(-t_tr / tau_t)), tau_t
+
+
 def preheat(rho_m: float, c_m: float, k_m: float, R: float, R_i: float, h_oven: float,
             T_oven: float, T_0: float, t_pre: float) -> dict:
     """D1 özet sonucu. R_i > 0 ise model uygulanmaz (valid=False)."""

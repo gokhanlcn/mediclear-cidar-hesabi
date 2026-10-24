@@ -99,6 +99,15 @@ _add("t_pre", "t_ön", "Ön ısıtma süresi", "s", "Proses", "D1",
 _add("T_0", "T_0", "Mandrelin fırına giriş sıcaklığı", "°C", "Proses", "D1",
      "Mandrel fırına girerken sahip olduğu sıcaklık (D1'deki T_0).", "Oda sıcaklığı",
      "Hat ölçümü / tasarım", 25, bound="any", in_md_table=False)
+_add("t_tr", "t_taşıma", "Fırından banyoya taşıma süresi", "s", "Proses", "D1 (taşıma)",
+     "Mandrelin fırından çıkıp banyoya girene kadar havada geçirdiği süre.", "Hat indeksleme süresi",
+     "Hat tasarımı", 12, bound="nonneg", in_md_table=False)
+_add("T_amb", "T_ortam", "Ortam havası sıcaklığı", "°C", "Proses", "D1 (taşıma)",
+     "Taşıma sırasında mandreli çevreleyen havanın sıcaklığı.", "Oda sıcaklığı", "Hat ortamı", 23,
+     bound="any", in_md_table=False)
+_add("h_amb", "h_ortam", "Ortam havası ısı geçiş katsayısı", "W/(m²·K)", "Proses", "D1 (taşıma)",
+     "Taşıma sırasında havaya doğal taşınım (ve ışınım) ile ısı geçiş katsayısı.", "4–11 (doğal taşınım)",
+     "Isı transferi kitabı (Churchill–Chu)", 7.5, in_md_table=False)
 _add("T_m0", "T_m0", "1. daldırmada mandrel sıcaklığı", "°C", "Proses", "D2, D3",
      "Mandrel banyoya girerken sahip olduğu sıcaklık. D1'den hesaplanabilir veya doğrudan girilir.",
      "D1'den hesaplanır", "–", 150, bound="any", in_md_table=False)
@@ -181,15 +190,6 @@ MATERIALS: dict[str, dict[str, float]] = {
     "304 paslanmaz": {"rho_m": 8000.0, "c_m": 500.0, "k_m": 16.0},
     "Alüminyum": {"rho_m": 2700.0, "c_m": 900.0, "k_m": 200.0},
 }
-
-# Film formülü seçenekleri (kullanıcı seçer; program seçim yapmaz)
-FILM_MODELS: dict[str, str] = {
-    "D7a": "D7a – Landau–Levich–Derjaguin (kalın mandrel, düşük hız)",
-    "D7b": "D7b – Fiber kaplama (ince mandrel)",
-    "D7c": "D7c – Viskoz–yerçekimi (yüksek hız)",
-    "min_ac": "D7a ile D7c'nin küçüğü (Rev. 2 yaklaşımı)",
-}
-
 
 def param(key: str) -> Param:
     return PARAMS[key]

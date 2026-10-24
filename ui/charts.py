@@ -57,23 +57,25 @@ def wall_composition(res: ModelResult, eps: float, phi: float, d_wire: float) ->
 
 
 def design_map(dm, title: str, nominal: tuple[float, float] | None = None) -> go.Figure:
-    """dm: inverse.DesignMap. nominal: (t_bekleme [s], T_m0 [K]) işaretlenecek nokta."""
+    """dm: inverse.DesignMap. nominal: (x, y) SI değerleri – işaretlenecek mevcut ayar."""
+    from physics.inverse import AXES
+    (xn, xu), (yn, yu) = AXES[dm.x_key], AXES[dm.y_key]
     W = _mm(dm.w)
     lo, hi = _mm(dm.w_target - dm.w_tol), _mm(dm.w_target + dm.w_tol)
-    x, y = dm.t_wait, from_si(dm.T_m0, "°C")
+    x, y = from_si(dm.x, xu), from_si(dm.y, yu)
+    xs, ys = xn.split(" –")[0], yn.split(" –")[0]
     fig = go.Figure()
     fig.add_contour(x=x, y=y, z=W, colorscale="Viridis", colorbar=dict(title="w [mm]"),
                     contours=dict(showlabels=True, labelfont=dict(color="white")), name="w",
-                    hovertemplate="t_bekleme = %{x:.1f} s<br>T_m0 = %{y:.0f} °C<br>w = %{z:.3f} mm<extra></extra>")
+                    hovertemplate=f"{xs} = %{{x:.3g}} {xu}<br>{ys} = %{{y:.3g}} {yu}<br>w = %{{z:.3f}} mm<extra></extra>")
     fig.add_contour(x=x, y=y, z=W, showscale=False, hoverinfo="skip", name="Hedef bandı",
                     # Plotly koşulu SAĞLAMAYAN bölgeyi boyar: "][" (bandın dışı) → bandın içi boyanır
                     contours=dict(type="constraint", operation="][", value=[lo, hi]),
                     fillcolor="rgba(255,60,60,0.6)", line=dict(color="red", width=2))
-    if nominal is not None:
-        t_n, T_n = nominal[0], from_si(nominal[1], "°C")
-        if x.min() <= t_n <= x.max() and y.min() <= T_n <= y.max():
-            fig.add_scatter(x=[t_n], y=[T_n], mode="markers", name="Şu anki ayar",
+    if nominal is not None and None not in nominal:
+        xn_v, yn_v = from_si(nominal[0], xu), from_si(nominal[1], yu)
+        if x.min() <= xn_v <= x.max() and y.min() <= yn_v <= y.max():
+            fig.add_scatter(x=[xn_v], y=[yn_v], mode="markers", name="Şu anki ayar",
                             marker=dict(size=14, color="white", symbol="x", line=dict(width=2, color="black")))
-    fig.update_layout(title=title, xaxis_title="Bekleme süresi t_bekleme [s]",
-                      yaxis_title="Mandrel sıcaklığı T_m0 [°C]")
+    fig.update_layout(title=title, xaxis_title=f"{xn} [{xu}]", yaxis_title=f"{yn} [{yu}]")
     return fig

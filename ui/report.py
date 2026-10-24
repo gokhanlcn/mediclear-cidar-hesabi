@@ -11,7 +11,7 @@ import plotly.graph_objects as go
 from physics import params
 from physics.model import ModelResult
 from physics.params import Settings
-from physics.symbols import FILM_MODELS, PARAMS
+from physics.symbols import PARAMS
 from physics.units import from_si
 from ui import charts
 from ui.common import DISCLAIMER, num, style_fig
@@ -20,8 +20,8 @@ ASSUMPTIONS = [
     "Toplam kalınlık = jel katmanı (D3, ısı iletimi) + sürüklenen film (D7, D8); kürde (1 − ε) ile çeker (D9).",
     "Jelleşme gizli ısısı, banyodaki konveksiyon ve sıcaklığa bağlı özellik değişimi ihmal edildi.",
     "Jelleşme geri dönüşsüz kabul edildi; D3 Crank–Nicolson sonlu farklarla çözüldü.",
-    "Film formülü ve tüm model katsayıları (C_LLD, C_fib, C_grav, C_dur) kullanıcı tarafından seçilir/girilir; "
-    "değerleri ve kaynakları girdi tablosundadır.",
+    "Film formülü otomatik seçilir: R > ℓ_c (levha) ise h = min(D7a, D7c), değilse D7b; model katsayıları "
+    "(C_LLD, C_fib, C_grav, C_dur) kaynaklarıyla girdi tablosundadır.",
     "Film, jel yüzeyine (R_s + s_jel) sürüklenir; toplamda L boyunca ortalama film kalınlığı kullanılır.",
     "Spiralli tüp iki daldırma olarak modellendi; w = s_1 + d_tel + s_2. 2. daldırmada tel bölgesi, çelik tel "
     "ve oluklara dolan plastisolden oluşan halka olarak D3'e girer: φ = πd/(4p), (ρc)_eff karışım kuralı, "
@@ -103,11 +103,11 @@ def build_report(df: pd.DataFrame, s: Settings, res: ModelResult, p: dict,
                      "Bu değerler kaynakla teyit edilmeden rapor kesin sonuç olarak kullanılmamalıdır.</div>")
 
     # --- Ayarlar ve ana sonuç ---------------------------------------------------------
-    mode = "D1'den (ön ısıtma)" if s.T_m0_mode == "D1" else "doğrudan girildi"
+    mode = "D1 (ön ısıtma) + taşıma soğuması" if s.T_m0_mode == "D1" else "doğrudan girildi"
     parts.append("<h2>1. Ayarlar ve ana sonuç</h2>"
                  f"<div>Malzeme: <b>{s.material_type}</b> · Mandrel: <b>{html.escape(s.mandrel_material)}</b> · "
                  f"Spiral: <b>{'evet (iki daldırma)' if s.spiral else 'hayır (tek daldırma)'}</b> · "
-                 f"T_m0: <b>{mode}</b> · Film formülü: <b>{html.escape(FILM_MODELS.get(s.film_model, '–'))}</b></div>")
+                 f"T_m0: <b>{mode}</b> · Film formülü: <b>otomatik (levha: min(D7a, D7c); fiber: D7b)</b></div>")
     status = "<b class='ok'>✔ Uygun</b>" if res.ok else "<b class='bad'>✘ Uygun değil</b>"
     parts.append("<div class='kpis'>"
                  f"<div class='kpi'>Hesaplanan cidar w<b>{num(mm(res.w), 3)} mm</b></div>"
@@ -150,7 +150,8 @@ def build_report(df: pd.DataFrame, s: Settings, res: ModelResult, p: dict,
                                     p.get("d_wire", 0.0))]
     if ters is not None:
         figs.append(charts.design_map(ters["dm"], ters.get("title", "Ters tasarım haritası"),
-                                      nominal=(p["t_wait"], res.T_m0)))
+                                      nominal=tuple(res.T_m0 if k == "T_m0" else p.get(k)
+                                                    for k in (ters["dm"].x_key, ters["dm"].y_key))))
     parts.append(f"<h2>{3 if numara is not None and not numara.empty else 2}. Ana grafikler</h2><div class='grid'>")
     parts += [_fig_html(f, i == 0) for i, f in enumerate(figs)]
     parts.append("</div>")

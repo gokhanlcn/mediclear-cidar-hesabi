@@ -14,8 +14,7 @@ QUALITY_LABELS = {"normal": "Normal (önerilen)", "hassas": "Hassas (yavaş)", "
 
 def options(**override) -> Options:
     s = state.settings()
-    opt = Options(spiral=s.spiral, T_m0_mode=s.T_m0_mode, film_model=s.film_model,
-                  quality=st.session_state.get("quality", "normal"))
+    opt = Options(spiral=s.spiral, T_m0_mode=s.T_m0_mode, quality=st.session_state.get("quality", "normal"))
     for k, v in override.items():
         setattr(opt, k, v)
     return opt

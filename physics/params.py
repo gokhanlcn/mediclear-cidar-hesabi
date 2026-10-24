@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from .symbols import FILM_MODELS, MATERIALS, PARAMS
+from .symbols import MATERIALS, PARAMS
 from .units import to_si
 
 APPROX_NOTE = "YAKLAŞIK – kaynağa göre teyit edin"
@@ -22,7 +22,7 @@ COLUMNS = ["Kod", "Grup", "Sembol", "Parametre", "Birim", "Değer", "Kaynak", "N
 VALUE_COL = "Değer"
 TABLE_KEYS = [k for k in PARAMS if k != "m"]   # m (tartım) D10 sayfasında girilir
 WIRE_KEYS = [k for k in PARAMS if PARAMS[k].group == "Tel / 2. daldırma"]
-D1_KEYS = ("T_oven", "h_oven", "t_pre", "T_0")
+D1_KEYS = ("T_oven", "h_oven", "t_pre", "T_0", "t_tr", "T_amb", "h_amb")
 
 
 @dataclass
@@ -33,7 +33,6 @@ class Settings:
     mandrel_material: str = "316L paslanmaz"
     spiral: bool = True
     draft: bool = False              # Taslak mod: kaynaksız değerlerle hesaba izin ver
-    film_model: str = ""             # FILM_MODELS anahtarı; boşsa seçilmemiş
 
     def to_dict(self) -> dict:
         return dict(self.__dict__)
@@ -102,26 +101,6 @@ def project_table() -> pd.DataFrame:
         df.loc[sel, "Kaynak"] = f"{DOC}: {src}" if src else ""
         df.loc[sel, "Not"] = note
     return df
-
-
-def link_second_dip_temperatures(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
-    """veriler.md kuralı: T_m0,2 = T_m0 (başlangıç) ve T_s1 = T_t = T_m0,2.
-
-    T_m0,2 boşsa T_m0'dan alınır; T_s1 ve T_t, T_m0,2'ye eşitlenir. Değişen kodları döndürür.
-    """
-    df = df.copy()
-    changed = []
-    T2 = _val(df, "T_m0_2")
-    if T2 is None:
-        T2 = _val(df, "T_m0")
-        if T2 is None:
-            return df, changed
-        df.loc[df.Kod == "T_m0_2", [VALUE_COL, "Kaynak"]] = [T2, "veriler.md: başlangıç değeri = T_m0"]
-        changed.append("T_m0_2")
-    for k in ("T_s1", "T_t"):
-        df.loc[df.Kod == k, [VALUE_COL, "Kaynak"]] = [T2, "veriler.md: = T_m0,2"]
-        changed.append(k)
-    return df, changed
 
 
 def project_settings() -> "Settings":
@@ -201,15 +180,10 @@ def active_keys(s: Settings) -> list[str]:
     if s.T_m0_mode == "D1":
         keys.remove("T_m0")
     else:
-        keys.remove("t_pre")     # T_m0 doğrudan girildiğinde t_ön D1'in sonucudur (hedefe ulaşma süresi)
+        # T_m0 doğrudan girildiğinde t_ön D1'in sonucudur; taşıma soğuması kullanılmaz
+        keys = [k for k in keys if k not in ("t_pre", "t_tr", "T_amb", "h_amb")]
     if not s.spiral:
         keys = [k for k in keys if k not in WIRE_KEYS]
-    if s.film_model and s.film_model != "D7b":
-        keys.remove("C_fib")
-    if s.film_model in ("D7a", "D7b"):
-        keys.remove("C_grav")
-    if s.film_model in ("D7b", "D7c"):
-        keys.remove("C_lld")
     return keys
 
 
@@ -221,10 +195,6 @@ def _val(df: pd.DataFrame, key: str):
 def validate(df: pd.DataFrame, s: Settings) -> Validation:
     v = Validation()
     act = active_keys(s)
-    if not s.film_model:
-        v.issues.append(Issue("hata", None, "Film formülü seçilmemiş. Model katsayıları sekmesinde "
-                              "hangi film formülünün (D7a / D7b / D7c / D7a–D7c'nin küçüğü) "
-                              "kullanılacağını seç."))
     for _, row in df.iterrows():
         k = row.Kod
         if k not in act and k != "T_fuz":
@@ -370,6 +340,4 @@ def load_file(data: bytes, filename: str) -> tuple[pd.DataFrame, Settings | None
     if matched == 0:
         raise ValueError("Dosyada tanınan parametre satırı yok. Sütun başlıklarının "
                          "'Sembol, Parametre, Birim, Değer, Kaynak, Not' olduğundan emin ol.")
-    if settings is not None and settings.film_model and settings.film_model not in FILM_MODELS:
-        settings.film_model = ""
     return df, settings, notes

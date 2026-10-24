@@ -59,26 +59,25 @@ def test_d6_numbers():
     assert film.capillary_length(0.035, 1250, G) == pytest.approx(1.689e-3, rel=1e-3)
 
 
-@pytest.mark.parametrize("model", ["D7a", "D7b", "D7c"])
-def test_film_thickness_uses_selected_formula(model):
-    r = film.film_thickness(model, 2e-3, 3.0, 1e-3, 0.035, 1250, G, **COEF)
-    assert r.formula == model and r.h0 == pytest.approx(r.values[model])
-
-
-def test_film_thickness_min_branch():
-    r = film.film_thickness("min_ac", 2e-3, 3.0, 1e-3, 0.035, 1250, G, **COEF)
+def test_auto_plate_takes_smaller_branch():
+    r = film.film_thickness(4e-3, 3.0, 1e-3, 0.032, 1200, G, **COEF)      # R/ℓ_c ≈ 2,4 → levha
+    assert r.geometry == "levha"
     assert r.h0 == pytest.approx(min(r.values["D7a"], r.values["D7c"]))
+    assert r.formula == ("D7a" if r.values["D7a"] <= r.values["D7c"] else "D7c")
 
 
-def test_film_thickness_requires_choice():
-    with pytest.raises(ValueError):
-        film.film_thickness("", 2e-3, 3.0, 1e-3, 0.035, 1250, G, **COEF)
+def test_auto_branch_switches_at_crossover():
+    Cx = film.crossover_capillary(0.94, 1.0)
+    assert Cx == pytest.approx((1.0 / 0.94) ** 6)
+    gam, eta = 0.032, 3.0
+    low = film.film_thickness(4e-3, eta, 0.5 * Cx * gam / eta, gam, 1200, G, 0.94, 1.34, 1.0)
+    high = film.film_thickness(4e-3, eta, 2.0 * Cx * gam / eta, gam, 1200, G, 0.94, 1.34, 1.0)
+    assert low.formula == "D7a" and high.formula == "D7c"
 
 
-def test_md_criteria_info_has_no_verdict():
-    crit = film.md_criteria(1e-3, 0.05, 1.7e-3)
-    assert [k for k, _, _ in crit] == ["D7a", "D7b", "D7c"]
-    assert all(isinstance(v, str) and "=" in v for _, _, v in crit)
+def test_auto_fiber_for_thin_mandrel():
+    r = film.film_thickness(1e-3, 3.0, 1e-3, 0.035, 1250, G, **COEF)       # R < ℓ_c
+    assert r.geometry == "fiber" and r.formula == "D7b" and r.h0 == pytest.approx(r.values["D7b"])
 
 
 def test_d8_stop_thickness_coefficient():
